@@ -39,3 +39,10 @@ remaining space rendered as a ghosted region in the 3D view.
 Django REST Framework (matches the stack used in other portfolio projects) running a
 heavier solver — e.g. Python's `py3dbp` — for large item counts, saved/shared packing
 plans, or user accounts. Not needed for the core use case.
+
+**Visual polish (v2, optional)**
+Preset items (bicycle, pallet, drum) can later get real meshes instead of a plain
+labeled box: model them in Blender, export as glTF/GLB, and load them with
+`@react-three/drei`'s `useGLTF`. This only changes what's rendered inside each item's
+bounding box — the packing algorithm still places everything by bounding-box
+dimensions regardless of the mesh. Not needed to ship v1.
