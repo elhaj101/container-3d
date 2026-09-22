@@ -231,6 +231,7 @@ function freightSummary(it: Item) {
   if (it.weightKg) parts.push(`${it.weightKg} kg each`)
   if (it.gap) parts.push(`${it.gap} cm spacing`)
   if (it.stackable === false) parts.push('no stacking')
+  if (it.floorOnly) parts.push('bottom only')
   if ((it.sequence ?? 1) !== 1) parts.push(`sequence ${it.sequence}`)
   return parts.join(' · ')
 }
@@ -256,6 +257,15 @@ function FreightOptions({ item: it }: { item: Item }) {
           className="accent-sky-500"
         />
         Do not stack (nothing on top)
+      </label>
+      <label className="mt-1 flex cursor-pointer items-center gap-1.5 text-slate-400">
+        <input
+          type="checkbox"
+          checked={it.floorOnly ?? false}
+          onChange={(e) => updateItem(it.id, { floorOnly: e.target.checked || undefined })}
+          className="accent-sky-500"
+        />
+        Always bottom (on the floor, never on top of other items)
       </label>
     </details>
   )
@@ -352,10 +362,11 @@ interface BatchOptions {
   sequence: number
   keepUpright: boolean
   noStack: boolean
+  floorOnly: boolean
   round: boolean
 }
 
-const DEFAULT_BATCH: BatchOptions = { gap: 0, weightKg: 0, sequence: 1, keepUpright: false, noStack: false, round: false }
+const DEFAULT_BATCH: BatchOptions = { gap: 0, weightKg: 0, sequence: 1, keepUpright: false, noStack: false, floorOnly: false, round: false }
 
 function BulkAdder() {
   const addItems = usePlanner((s) => s.addItems)
@@ -398,6 +409,10 @@ function BulkAdder() {
             Do not stack
           </label>
           <label className="flex cursor-pointer items-center gap-1.5">
+            <input type="checkbox" checked={opts.floorOnly} onChange={(e) => set({ floorOnly: e.target.checked })} className="accent-sky-500" />
+            Always bottom
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5">
             <input type="checkbox" checked={opts.round} onChange={(e) => set({ round: e.target.checked })} className="accent-sky-500" />
             Round (drums, rolls)
           </label>
@@ -433,6 +448,7 @@ function BulkAdder() {
                 weightKg: preset.weightKg ?? (opts.weightKg || undefined),
                 gap: opts.gap || undefined,
                 stackable: opts.noStack ? false : undefined,
+                floorOnly: opts.floorOnly || undefined,
                 sequence: opts.sequence,
               },
             })),

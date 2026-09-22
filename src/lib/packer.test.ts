@@ -143,4 +143,20 @@ describe('pack — freight options', () => {
     const earlyFront = Math.max(...early.map((p) => p.x + p.dx))
     expect(late.x).toBeGreaterThanOrEqual(earlyFront)
   })
+
+  it('keeps floor-only items on the floor, even when they are small', () => {
+    const res = pack({ length: 20, width: 10, height: 30 }, [
+      item({ id: 'big', length: 10, width: 10, height: 10, quantity: 3 }),
+      item({ id: 'heavy', length: 10, width: 10, height: 5, quantity: 2, floorOnly: true }),
+    ])
+    const heavy = res.placements.filter((p) => p.itemId === 'heavy')
+    expect(heavy).toHaveLength(2)
+    expect(heavy.every((p) => p.y === 0)).toBe(true)
+  })
+
+  it('leaves floor-only items out rather than stacking them', () => {
+    const res = pack({ length: 10, width: 10, height: 30 }, [item({ floorOnly: true, quantity: 2 })])
+    expect(res.placements).toHaveLength(1)
+    expect(res.unplaced).toEqual({ a: 1 })
+  })
 })

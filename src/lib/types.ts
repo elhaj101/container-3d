@@ -35,6 +35,8 @@ export interface Item {
   weightKg?: number
   /** When false nothing may be placed on top of this item. Defaults to true. */
   stackable?: boolean
+  /** When true the item must stand on the container floor, never on other items. */
+  floorOnly?: boolean
   /** Load sequence: 1 is loaded first (back wall), higher numbers nearer the doors. */
   sequence?: number
 }

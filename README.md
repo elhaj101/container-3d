@@ -40,6 +40,9 @@ npm run build   # static build in dist/
   - *Weight* — kg per unit; loading stops at the container's max payload and the tool
     says how many units were left off for weight.
   - *Do not stack* — nothing is placed on top of that item.
+  - *Always bottom* — the item stands on the container floor, never on other items
+    (heavy goods, liquids); these are loaded first within their load sequence so the
+    floor is still free for them.
   - *This side up* — the item only rotates around its vertical axis.
   - *Load sequence* — for multi-drop consolidation: sequence 1 goes in first at the back,
     and each later sequence starts in front of everything loaded before it, so an early

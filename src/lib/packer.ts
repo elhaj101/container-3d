@@ -197,6 +197,8 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     .sort(
       (a, b) =>
         (a.item.sequence ?? 1) - (b.item.sequence ?? 1) ||
+        // Floor-only items claim floor space before anything can cover it.
+        Number(b.item.floorOnly ?? false) - Number(a.item.floorOnly ?? false) ||
         b.item.length * b.item.width * b.item.height -
           a.item.length * a.item.width * a.item.height ||
         Math.max(b.item.length, b.item.width, b.item.height) -
@@ -247,6 +249,7 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     const sizes = orientations(item).map(([dx, dy, dz]): Size => [dx + gap, dy, dz + gap])
     for (const p of points) {
       if (p.x < minX - EPS) continue
+      if (item.floorOnly && p.y > EPS) continue
       for (const s of sizes) {
         if (p.x + s[0] > L + EPS || p.y + s[1] > H + EPS || p.z + s[2] > W + EPS) continue
         if (best && s[0] >= best.s[0]) continue

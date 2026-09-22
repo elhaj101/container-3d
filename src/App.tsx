@@ -12,7 +12,7 @@ export default function App() {
   // Pack from a deferred copy so typing stays responsive on big loads, and only repack
   // when something that affects packing changes (not names or colours).
   const packItems = useDeferredValue(items)
-  const packKey = packItems.map((i) => `${i.id}:${i.length}:${i.width}:${i.height}:${i.quantity}:${i.keepUpright}:${i.gap}:${i.weightKg}:${i.stackable}:${i.sequence}`).join('|')
+  const packKey = packItems.map((i) => `${i.id}:${i.length}:${i.width}:${i.height}:${i.quantity}:${i.keepUpright}:${i.gap}:${i.weightKg}:${i.stackable}:${i.floorOnly}:${i.sequence}`).join('|')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const result = useMemo(() => pack(container, packItems), [container, packKey])
   const visible = visibleCount === null ? result.placements : result.placements.slice(0, visibleCount)
