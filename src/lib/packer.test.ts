@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { pack } from './packer'
+import { CAR_PRESETS, carItem, CONTAINER_PRESETS } from './presets'
 import type { Item, Placement } from './types'
 
 function item(overrides: Partial<Item>): Item {
@@ -158,5 +159,15 @@ describe('pack — freight options', () => {
     const res = pack({ length: 10, width: 10, height: 30 }, [item({ floorOnly: true, quantity: 2 })])
     expect(res.placements).toHaveLength(1)
     expect(res.unplaced).toEqual({ a: 1 })
+  })
+
+  it('loads cars upright, on the floor, one row per container width', () => {
+    const corolla = CAR_PRESETS[0]
+    const car = { ...item({ id: 'car', quantity: 3 }), ...carItem({ ...corolla, name: 'Corolla' }) }
+    const twenty = pack(CONTAINER_PRESETS[0], [car])
+    expect(twenty.placements).toHaveLength(1)
+    const forty = pack(CONTAINER_PRESETS[1], [car])
+    expect(forty.placements).toHaveLength(2)
+    expect(forty.placements.every((p) => p.y === 0 && p.dy === corolla.height)).toBe(true)
   })
 })

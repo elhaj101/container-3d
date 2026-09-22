@@ -34,6 +34,11 @@ npm run build   # static build in dist/
   lying down otherwise. Pasted lines that mention a drum, barrel, roll or reel (or use
   `Ø60x90`) are round automatically. Packing uses their square footprint (Ø × Ø), the
   usual straight-row stow; staggered/nested drum patterns aren't modelled.
+- **Cars** tab: 10 common models with published exterior dimensions (without mirrors)
+  and approximate kerb weights — Toyota Corolla, VW Golf 8, Honda Civic, Toyota RAV4,
+  Hyundai Tucson, Mercedes C-Class, BMW 3 Series, Tesla Model 3, Toyota Hilux Double Cab,
+  Toyota Land Cruiser 300 — or any other car by size. Cars are always upright, on the
+  floor, with nothing on top and 10 cm spacing by default, and render as a simple car.
 - **Freight options**, set per batch when bulk pasting and editable per item afterwards:
   - *Spacing* — horizontal clearance between units (half of it kept from the walls), for
     airflow, dunnage or handling room.

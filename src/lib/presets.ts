@@ -47,3 +47,48 @@ export const ITEM_COLORS = [
   '#6b7bd6',
   '#b86f4b',
 ]
+
+export interface CarPreset {
+  make: string
+  model: string
+  /** Exterior length × width (without mirrors) × height, cm. */
+  length: number
+  width: number
+  height: number
+  /** Approximate kerb weight, kg. Varies by engine and trim. */
+  weightKg: number
+}
+
+// Published exterior dimensions of current-generation models (base body style).
+// Trim, wheels and roof rails change these slightly: check the actual vehicle's papers.
+export const CAR_PRESETS: CarPreset[] = [
+  { make: 'Toyota', model: 'Corolla sedan (E210)', length: 463, width: 178, height: 143.5, weightKg: 1380 },
+  { make: 'Volkswagen', model: 'Golf 8', length: 428.4, width: 178.9, height: 145.6, weightKg: 1290 },
+  { make: 'Honda', model: 'Civic sedan (11th gen)', length: 467.4, width: 180.2, height: 141.5, weightKg: 1340 },
+  { make: 'Toyota', model: 'RAV4 (XA50)', length: 460, width: 185.5, height: 168.5, weightKg: 1650 },
+  { make: 'Hyundai', model: 'Tucson (NX4)', length: 450, width: 186.5, height: 165, weightKg: 1550 },
+  { make: 'Mercedes-Benz', model: 'C-Class sedan (W206)', length: 475.1, width: 182, height: 143.8, weightKg: 1650 },
+  { make: 'BMW', model: '3 Series sedan (G20)', length: 470.9, width: 182.7, height: 144.2, weightKg: 1550 },
+  { make: 'Tesla', model: 'Model 3 (2024)', length: 472, width: 185, height: 144.1, weightKg: 1760 },
+  { make: 'Toyota', model: 'Hilux Double Cab (AN120)', length: 532.5, width: 185.5, height: 181.5, weightKg: 2100 },
+  { make: 'Toyota', model: 'Land Cruiser 300', length: 498.5, width: 198, height: 194.5, weightKg: 2500 },
+]
+
+// Cars always travel upright, on the floor, with nothing on top, and with room to lash
+// them down and open a door.
+export const CAR_DEFAULT_GAP = 10
+
+export function carItem(car: Omit<CarPreset, 'make' | 'model'> & { name: string }, gap = CAR_DEFAULT_GAP): ItemPreset {
+  return {
+    name: car.name,
+    length: car.length,
+    width: car.width,
+    height: car.height,
+    weightKg: car.weightKg,
+    shape: 'car',
+    keepUpright: true,
+    floorOnly: true,
+    stackable: false,
+    gap,
+  }
+}

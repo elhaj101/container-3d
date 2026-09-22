@@ -167,18 +167,26 @@ const capacityFor = (n: number) => Math.max(64, 2 ** Math.ceil(Math.log2(n + 1))
 function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<string, Item> }) {
   const boxRef = useRef<THREE.InstancedMesh>(null)
   const cylRef = useRef<THREE.InstancedMesh>(null)
+  const bodyRef = useRef<THREE.InstancedMesh>(null)
+  const cabinRef = useRef<THREE.InstancedMesh>(null)
+  const wheelRef = useRef<THREE.InstancedMesh>(null)
   const [hovered, setHovered] = useState<number | null>(null)
 
   // Placement indices per shape; instance i of a mesh maps back through these.
-  const { boxIdx, cylIdx } = useMemo(() => {
+  const { boxIdx, cylIdx, carIdx } = useMemo(() => {
     const boxIdx: number[] = []
     const cylIdx: number[] = []
-    placements.forEach((p, i) => (byId.get(p.itemId)?.shape === 'cylinder' ? cylIdx : boxIdx).push(i))
-    return { boxIdx, cylIdx }
+    const carIdx: number[] = []
+    placements.forEach((p, i) => {
+      const shape = byId.get(p.itemId)?.shape
+      ;(shape === 'cylinder' ? cylIdx : shape === 'car' ? carIdx : boxIdx).push(i)
+    })
+    return { boxIdx, cylIdx, carIdx }
   }, [placements, byId])
   // Capacity only grows in steps, so meshes aren't recreated on every small edit.
   const boxCap = capacityFor(boxIdx.length)
   const cylCap = capacityFor(cylIdx.length)
+  const carCap = capacityFor(carIdx.length)
 
   useLayoutEffect(() => {
     const m = new THREE.Matrix4()
@@ -222,7 +230,59 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
       if (cyl.instanceColor) cyl.instanceColor.needsUpdate = true
       cyl.computeBoundingSphere()
     }
-  }, [placements, byId, boxIdx, cylIdx, boxCap, cylCap])
+
+    const body = bodyRef.current
+    const cabin = cabinRef.current
+    const wheels = wheelRef.current
+    if (body && cabin && wheels) {
+      const dark = new THREE.Color('#0b1220')
+      const tyre = new THREE.Color('#111418')
+      carIdx.forEach((pi, i) => {
+        const p = placements[pi]
+        const item = byId.get(p.itemId)!
+        // Cars only turn about the vertical axis; find which way the bonnet points.
+        const alongX = Math.abs(p.dx - item.length) < 1e-6 || p.dx >= p.dz
+        const len = (alongX ? p.dx : p.dz) * M
+        const wid = (alongX ? p.dz : p.dx) * M
+        const h = p.dy * M
+        const cx = (p.x + p.dx / 2) * M
+        const cz = (p.z + p.dz / 2) * M
+        const y0 = p.y * M
+        // Place a part given offsets and size in the car's own frame (length, up, width).
+        const part = (mesh: THREE.InstancedMesh, at: number, ol: number, oy: number, ow: number, sl: number, sy: number, sw: number, q = Q_Y) => {
+          pos.set(cx + (alongX ? ol : ow), y0 + oy, cz + (alongX ? ow : ol))
+          scale.set(alongX ? sl : sw, sy, alongX ? sw : sl)
+          mesh.setMatrixAt(at, m.compose(pos, q, scale))
+        }
+        color.set(item.color)
+        part(body, i, 0, h * 0.35, 0, len * 0.98, h * 0.46, wid * 0.98)
+        body.setColorAt(i, color)
+        part(cabin, i, -len * 0.04, h * 0.79, 0, len * 0.5, h * 0.42, wid * 0.86)
+        cabin.setColorAt(i, color.clone().lerp(dark, 0.55))
+        // Wheels: unit cylinder turned so its axis runs across the car.
+        const r = Math.min(h * 0.22, len * 0.08)
+        const q = alongX ? Q_Z : Q_X
+        let w = i * 4
+        for (const sl of [-1, 1])
+          for (const sw of [-1, 1]) {
+            const ol = sl * len * 0.33
+            const ow = sw * (wid / 2 - wid * 0.07)
+            pos.set(cx + (alongX ? ol : ow), y0 + r, cz + (alongX ? ow : ol))
+            scale.set(r * 2, wid * 0.12, r * 2)
+            wheels.setMatrixAt(w, m.compose(pos, q, scale))
+            wheels.setColorAt(w, tyre)
+            w++
+          }
+      })
+      for (const mesh of [body, cabin]) mesh.count = carIdx.length
+      wheels.count = carIdx.length * 4
+      for (const mesh of [body, cabin, wheels]) {
+        mesh.instanceMatrix.needsUpdate = true
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+        mesh.computeBoundingSphere()
+      }
+    }
+  }, [placements, byId, boxIdx, cylIdx, carIdx, boxCap, cylCap, carCap])
 
   const edges = useMemo(() => {
     const pos = new Float32Array(boxIdx.length * 24 * 3)
@@ -248,10 +308,12 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
   }, [placements, boxIdx])
   useEffect(() => () => edges.dispose(), [edges])
 
-  const hoverHandlers = (idx: number[]) => ({
+  const hoverHandlers = (idx: number[], perPlacement = 1) => ({
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      if (e.instanceId !== undefined && idx[e.instanceId] !== hovered) setHovered(idx[e.instanceId])
+      if (e.instanceId === undefined) return
+      const pi = idx[Math.floor(e.instanceId / perPlacement)]
+      if (pi !== hovered) setHovered(pi)
     },
     onPointerOut: () => setHovered(null),
   })
@@ -269,13 +331,25 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
         <cylinderGeometry args={[0.5, 0.5, 1, 28]} />
         <meshStandardMaterial />
       </instancedMesh>
+      <instancedMesh key={`cb${carCap}`} ref={bodyRef} args={[undefined, undefined, carCap]} {...hoverHandlers(carIdx)}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial metalness={0.3} roughness={0.45} />
+      </instancedMesh>
+      <instancedMesh key={`cc${carCap}`} ref={cabinRef} args={[undefined, undefined, carCap]} {...hoverHandlers(carIdx)}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial metalness={0.5} roughness={0.2} />
+      </instancedMesh>
+      <instancedMesh key={`cw${carCap}`} ref={wheelRef} args={[undefined, undefined, carCap * 4]} {...hoverHandlers(carIdx, 4)}>
+        <cylinderGeometry args={[0.5, 0.5, 1, 20]} />
+        <meshStandardMaterial roughness={0.9} />
+      </instancedMesh>
       <lineSegments geometry={edges}>
         <lineBasicMaterial color="#000000" transparent opacity={0.3} />
       </lineSegments>
       {hp && hItem && (
         <mesh position={[(hp.x + hp.dx / 2) * M, (hp.y + hp.dy / 2) * M, (hp.z + hp.dz / 2) * M]} raycast={() => null}>
           <boxGeometry args={[hp.dx * M + 0.01, hp.dy * M + 0.01, hp.dz * M + 0.01]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={hItem.shape === 'cylinder' ? 0.12 : 0.25} depthWrite={false} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={hItem.shape && hItem.shape !== 'box' ? 0.12 : 0.25} depthWrite={false} />
           <Html center distanceFactor={8} style={{ pointerEvents: 'none' }}>
             <div className="rounded-md bg-slate-900/90 px-2 py-1 text-xs whitespace-nowrap text-slate-100 shadow-lg">
               <div className="font-medium">

@@ -25,9 +25,10 @@ export interface Item {
   keepUpright: boolean
   /**
    * 'cylinder' = round item (drum, barrel, roll): length = width = diameter, height = length
-   * along its axis. Packed by its square footprint, rendered round. Defaults to 'box'.
+   * along its axis. Packed by its square footprint, rendered round. 'car' = vehicle, packed
+   * by its bounding box and rendered as a simple car. Defaults to 'box'.
    */
-  shape?: 'box' | 'cylinder'
+  shape?: 'box' | 'cylinder' | 'car'
   color: string
   /** Horizontal spacing between units, cm. Half of it is kept from walls too. */
   gap?: number

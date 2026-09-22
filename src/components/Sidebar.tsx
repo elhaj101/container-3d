@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { parseBulk } from '../lib/bulk'
-import { CONTAINER_PRESETS, CUSTOM_CONTAINER_ID, ITEM_PRESETS } from '../lib/presets'
+import { CAR_DEFAULT_GAP, CAR_PRESETS, carItem, CONTAINER_PRESETS, CUSTOM_CONTAINER_ID, ITEM_PRESETS } from '../lib/presets'
 import type { Item } from '../lib/types'
 import { useContainerDims, usePlanner } from '../store'
 import { NumField } from './NumField'
@@ -80,7 +80,7 @@ function ContainerPicker() {
   )
 }
 
-type AddMode = 'preset' | 'custom' | 'bulk'
+type AddMode = 'preset' | 'custom' | 'bulk' | 'cars'
 
 // Selector: where new items come from. Kept visually apart from the load list below.
 function AddItems() {
@@ -89,20 +89,21 @@ function AddItems() {
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-sky-900/60 bg-sky-950/20 p-3">
       <h2 className="text-xs font-semibold tracking-wider text-sky-300/80 uppercase">Add items</h2>
-      <div className="grid grid-cols-3 rounded-md border border-slate-700 bg-slate-950 p-0.5 text-xs">
-        {(['preset', 'custom', 'bulk'] as const).map((m) => (
+      <div className="grid grid-cols-4 rounded-md border border-slate-700 bg-slate-950 p-0.5 text-xs">
+        {(['preset', 'custom', 'bulk', 'cars'] as const).map((m) => (
           <button
             key={m}
             onClick={() => setMode(m)}
             className={`rounded px-2 py-1 capitalize ${mode === m ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}
           >
-            {m === 'bulk' ? 'Bulk paste' : m}
+            {m === 'bulk' ? 'Bulk' : m}
           </button>
         ))}
       </div>
       {mode === 'preset' && <PresetAdder />}
       {mode === 'custom' && <CustomAdder />}
       {mode === 'bulk' && <BulkAdder />}
+      {mode === 'cars' && <CarAdder />}
     </section>
   )
 }
@@ -163,12 +164,16 @@ function LoadList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
                 ✕
               </button>
             </div>
-            <ShapeToggle
-              shape={it.shape ?? 'box'}
-              onChange={(shape) =>
-                updateItem(it.id, shape === 'cylinder' ? { shape, width: it.length } : { shape })
-              }
-            />
+            {it.shape === 'car' ? (
+              <p className="mb-2 text-[11px] text-slate-500">Car · upright, on the floor, nothing on top</p>
+            ) : (
+              <ShapeToggle
+                shape={it.shape ?? 'box'}
+                onChange={(shape) =>
+                  updateItem(it.id, shape === 'cylinder' ? { shape, width: it.length } : { shape })
+                }
+              />
+            )}
             {it.shape === 'cylinder' ? (
               <div className="grid grid-cols-3 gap-2">
                 <NumField label="Ø (cm)" value={it.length} onChange={(d) => updateItem(it.id, { length: d, width: d })} min={1} />
@@ -268,6 +273,76 @@ function FreightOptions({ item: it }: { item: Item }) {
         Always bottom (on the floor, never on top of other items)
       </label>
     </details>
+  )
+}
+
+function CarAdder() {
+  const addItem = usePlanner((s) => s.addItem)
+  const [index, setIndex] = useState(0)
+  const [qty, setQty] = useState(1)
+  const [gap, setGap] = useState(CAR_DEFAULT_GAP)
+  const [other, setOther] = useState({ name: '', length: 450, width: 180, height: 150, weightKg: 1500 })
+  const custom = index === -1
+  const car = CAR_PRESETS[index]
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-800 p-3">
+      <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+        Model
+        <select
+          value={index}
+          onChange={(e) => setIndex(Number(e.target.value))}
+          className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+        >
+          {CAR_PRESETS.map((c, i) => (
+            <option key={`${c.make} ${c.model}`} value={i}>
+              {c.make} {c.model}
+            </option>
+          ))}
+          <option value={-1}>Other car (enter size)</option>
+        </select>
+      </label>
+
+      {custom ? (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            value={other.name}
+            onChange={(e) => setOther({ ...other, name: e.target.value })}
+            placeholder="Make and model"
+            className="col-span-2 rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500"
+          />
+          <NumField label="Length (cm)" value={other.length} step={0.1} onChange={(length) => setOther({ ...other, length })} min={1} />
+          <NumField label="Width, no mirrors (cm)" value={other.width} step={0.1} onChange={(width) => setOther({ ...other, width })} min={1} />
+          <NumField label="Height (cm)" value={other.height} step={0.1} onChange={(height) => setOther({ ...other, height })} min={1} />
+          <NumField label="Kerb weight (kg)" value={other.weightKg} onChange={(weightKg) => setOther({ ...other, weightKg })} />
+        </div>
+      ) : (
+        <p className="text-xs text-slate-300 tabular-nums">
+          {car.length} × {car.width} × {car.height} cm · ≈{car.weightKg.toLocaleString('en')} kg
+        </p>
+      )}
+
+      <div className="flex items-end gap-2">
+        <NumField label="Qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} className="w-16" />
+        <NumField label="Spacing (cm)" value={gap} onChange={setGap} className="w-24" />
+        <button
+          onClick={() =>
+            addItem(
+              carItem(custom ? { ...other, name: other.name.trim() || 'Car' } : { ...car, name: `${car.make} ${car.model}` }, gap),
+              qty,
+            )
+          }
+          className={`${primaryBtn} ml-auto`}
+        >
+          Add car
+        </button>
+      </div>
+      <p className="text-[11px] leading-snug text-slate-500">
+        Cars are loaded upright, on the floor, with nothing stacked on top, and with the spacing
+        above between cars for lashing and door access. Width is without mirrors; fold them in.
+        Sizes are published figures for the base body style, so check the actual vehicle.
+      </p>
+    </div>
   )
 }
 
