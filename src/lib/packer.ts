@@ -110,11 +110,18 @@ function overlapLen(a: number, alen: number, b: number, blen: number) {
   return Math.max(0, Math.min(a + alen, b + blen) - Math.max(a, b))
 }
 
+// Internal box: the footprint reserved for a unit, including its spacing.
+interface Box extends Placement {
+  stackable: boolean
+  gap: number
+}
+
 function supportRatio(p: Point, s: Size, placed: Iterable<Placement>) {
   if (p.y < EPS) return 1
   let area = 0
   for (const b of placed) {
     if (Math.abs(b.y + b.dy - p.y) > EPS) continue
+    if ((b as Box).stackable === false) continue
     area += overlapLen(p.x, s[0], b.x, b.dx) * overlapLen(p.z, s[2], b.z, b.dz)
   }
   return area / (s[0] * s[2])
@@ -189,20 +196,28 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     )
     .sort(
       (a, b) =>
+        (a.item.sequence ?? 1) - (b.item.sequence ?? 1) ||
         b.item.length * b.item.width * b.item.height -
           a.item.length * a.item.width * a.item.height ||
         Math.max(b.item.length, b.item.width, b.item.height) -
           Math.max(a.item.length, a.item.width, a.item.height),
     )
 
-  const placed: Placement[] = []
+  const placed: Box[] = []
   const grid = new BoxGrid()
   const unplaced: Record<string, number> = {}
+  const overweight: Record<string, number> = {}
+  const maxPayload = container.maxPayload && container.maxPayload > 0 ? container.maxPayload : Infinity
+  let totalWeight = 0
   let points: Point[] = [{ x: 0, y: 0, z: 0 }]
   const pointKeys = new Set([pointKey(points[0])])
   const { length: L, width: W, height: H } = container
 
   let lastFailedItem: string | null = null
+  // Each load sequence starts in front of everything loaded before it, so an earlier
+  // stop's cargo is never buried behind a later one's.
+  let currentSequence = -Infinity
+  let minX = 0
 
   for (const { item, unit } of units) {
     // Units of one item are consecutive and nothing changes after a failure, so once
@@ -211,13 +226,27 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
       unplaced[item.id] = (unplaced[item.id] ?? 0) + 1
       continue
     }
+    const weight = Math.max(0, item.weightKg ?? 0)
+    if (totalWeight + weight > maxPayload + EPS) {
+      unplaced[item.id] = (unplaced[item.id] ?? 0) + 1
+      overweight[item.id] = (overweight[item.id] ?? 0) + 1
+      continue
+    }
+    const gap = Math.max(0, item.gap ?? 0)
+    const sequence = item.sequence ?? 1
+    if (sequence !== currentSequence) {
+      if (placed.length) minX = placed.reduce((m, b) => Math.max(m, b.x + b.dx), 0)
+      currentSequence = sequence
+    }
 
     // Points are kept sorted in placement preference order, so the first point with any
     // valid orientation wins; among its orientations take the one reaching least far
     // toward the doors.
     let best: (Point & { s: Size }) | null = null
-    const sizes = orientations(item)
+    // Spacing widens the reserved footprint; height is left alone so stacks stay in contact.
+    const sizes = orientations(item).map(([dx, dy, dz]): Size => [dx + gap, dy, dz + gap])
     for (const p of points) {
+      if (p.x < minX - EPS) continue
       for (const s of sizes) {
         if (p.x + s[0] > L + EPS || p.y + s[1] > H + EPS || p.z + s[2] > W + EPS) continue
         if (best && s[0] >= best.s[0]) continue
@@ -236,7 +265,7 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     }
     lastFailedItem = null
 
-    const placement: Placement = {
+    const placement: Box = {
       itemId: item.id,
       unit,
       x: best.x,
@@ -245,8 +274,11 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
       dx: best.s[0],
       dy: best.s[1],
       dz: best.s[2],
+      stackable: item.stackable !== false,
+      gap,
     }
     placed.push(placement)
+    totalWeight += weight
     grid.add(placement)
 
     // Only the new box can swallow an existing point; new points are checked against all.
@@ -265,10 +297,23 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     }
   }
 
-  const usedVolume = placed.reduce((sum, b) => sum + b.dx * b.dy * b.dz, 0)
+  // Report each unit's real size and position, centred in its reserved footprint.
+  const placements: Placement[] = placed.map(({ itemId, unit, x, y, z, dx, dy, dz, gap }) => ({
+    itemId,
+    unit,
+    x: x + gap / 2,
+    y,
+    z: z + gap / 2,
+    dx: dx - gap,
+    dy,
+    dz: dz - gap,
+  }))
+  const usedVolume = placements.reduce((sum, b) => sum + b.dx * b.dy * b.dz, 0)
   return {
-    placements: placed,
+    placements,
     unplaced,
+    overweight,
+    totalWeight,
     containerVolume: L * W * H,
     usedVolume,
     usedLength: placed.reduce((m, b) => Math.max(m, b.x + b.dx), 0),

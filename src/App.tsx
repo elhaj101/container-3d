@@ -12,7 +12,7 @@ export default function App() {
   // Pack from a deferred copy so typing stays responsive on big loads, and only repack
   // when something that affects packing changes (not names or colours).
   const packItems = useDeferredValue(items)
-  const packKey = packItems.map((i) => `${i.id}:${i.length}:${i.width}:${i.height}:${i.quantity}:${i.keepUpright}`).join('|')
+  const packKey = packItems.map((i) => `${i.id}:${i.length}:${i.width}:${i.height}:${i.quantity}:${i.keepUpright}:${i.gap}:${i.weightKg}:${i.stackable}:${i.sequence}`).join('|')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const result = useMemo(() => pack(container, packItems), [container, packKey])
   const visible = visibleCount === null ? result.placements : result.placements.slice(0, visibleCount)
@@ -22,21 +22,21 @@ export default function App() {
     <div className="flex min-h-dvh flex-col bg-slate-950 text-slate-100 lg:h-dvh lg:flex-row">
       {/* On phones the 3D view sits below the item list, so keep the load level pinned in view. */}
       <div className="sticky top-0 z-10 bg-slate-950/80 p-2 backdrop-blur lg:hidden">
-        <LoadIndicator result={result} />
+        <LoadIndicator result={result} container={container} />
       </div>
       <aside className="w-full shrink-0 overflow-y-auto border-slate-800 p-4 lg:w-96 lg:border-r">
         <header className="mb-6">
           <h1 className="text-lg font-semibold">Container 3D</h1>
           <p className="text-sm text-slate-400">Pick a container, list your items, see how they pack.</p>
         </header>
-        <Sidebar unplaced={result.unplaced} />
+        <Sidebar unplaced={result.unplaced} overweight={result.overweight} />
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="relative h-[55vh] min-h-80 lg:h-auto lg:flex-1">
           <ContainerScene container={container} items={items} placements={visible} usedLength={visibleLength} />
           <div className="pointer-events-none absolute top-3 right-3 left-3 hidden justify-center lg:flex">
-            <LoadIndicator result={result} />
+            <LoadIndicator result={result} container={container} />
           </div>
           <p className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-slate-500">
             Drag to orbit · scroll to zoom · right-drag to pan · hover a box for details

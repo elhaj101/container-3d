@@ -109,3 +109,38 @@ describe('pack', () => {
     expect(res.unplaced).toEqual({})
   })
 })
+
+describe('pack — freight options', () => {
+  it('keeps the requested spacing between units and half of it from the walls', () => {
+    const res = pack({ length: 60, width: 20, height: 10 }, [item({ gap: 10, quantity: 5 })])
+    expect(res.placements).toHaveLength(3)
+    expect(res.placements.map((p) => p.x).sort((a, b) => a - b)).toEqual([5, 25, 45])
+    expect(res.placements.every((p) => p.z === 5 && p.dx === 10 && p.dz === 10)).toBe(true)
+    expect(res.unplaced).toEqual({ a: 2 })
+  })
+
+  it('never puts anything on top of a non-stackable item', () => {
+    const res = pack({ length: 10, width: 10, height: 30 }, [item({ stackable: false, quantity: 3 })])
+    expect(res.placements).toHaveLength(1)
+  })
+
+  it('stops loading at the payload limit and says why', () => {
+    const res = pack({ length: 100, width: 100, height: 100, maxPayload: 50 }, [
+      item({ weightKg: 20, quantity: 4 }),
+    ])
+    expect(res.placements).toHaveLength(2)
+    expect(res.totalWeight).toBe(40)
+    expect(res.overweight).toEqual({ a: 2 })
+  })
+
+  it('loads sequence 1 at the back and never tucks later sequences behind it', () => {
+    const res = pack({ length: 100, width: 100, height: 100 }, [
+      item({ id: 'late', length: 50, width: 50, height: 50, sequence: 2 }),
+      item({ id: 'early', length: 20, width: 20, height: 20, quantity: 3, sequence: 1 }),
+    ])
+    const early = res.placements.filter((p) => p.itemId === 'early')
+    const late = res.placements.find((p) => p.itemId === 'late')!
+    const earlyFront = Math.max(...early.map((p) => p.x + p.dx))
+    expect(late.x).toBeGreaterThanOrEqual(earlyFront)
+  })
+})

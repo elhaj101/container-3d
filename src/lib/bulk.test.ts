@@ -39,3 +39,11 @@ describe('parseBulk', () => {
     ])
   })
 })
+
+describe('parseBulk — weights', () => {
+  it('reads weight from a sixth column or a kg token', () => {
+    const { entries } = parseBulk('Crate, 100, 80, 60, 2, 35.5\nBox 40x30x30 x5 12kg\nTV 120x20x75 x2')
+    expect(entries.map((e) => e.preset.weightKg)).toEqual([35.5, 12, undefined])
+    expect(entries[1].quantity).toBe(5)
+  })
+})

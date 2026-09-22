@@ -46,7 +46,7 @@ export const usePlanner = create<PlannerState>()(
   persist(
     (set) => ({
       containerId: '20gp',
-      custom: { length: 600, width: 240, height: 240 },
+      custom: { length: 600, width: 240, height: 240, maxPayload: 0 },
       items: defaultItems(),
       visibleCount: null,
       selectContainer: (containerId) => set({ containerId, visibleCount: null }),

@@ -26,10 +26,22 @@ npm run build   # static build in dist/
 - **Default items** are three standard shipping cartons: M 40×30×30, L 60×38×38,
   XXL 75×42×41 cm. "Reset to M / L / XXL" restores them.
 - **Add items** three ways: pick a preset, enter one custom size, or **bulk paste** — one
-  item per line, e.g. `Box A, 40, 30, 30, 12`, tab-separated rows copied from a
-  spreadsheet, or `TV 120x20x75 x2`. Add `upright` to a line to lock its orientation.
+  item per line, e.g. `Box A, 40, 30, 30, 12, 8.5` (name, L, W, H, qty, kg per unit),
+  tab-separated rows copied from a spreadsheet, or `TV 120x20x75 x2 18kg`. Add `upright`
+  to a line to lock its orientation.
+- **Freight options**, set per batch when bulk pasting and editable per item afterwards:
+  - *Spacing* — horizontal clearance between units (half of it kept from the walls), for
+    airflow, dunnage or handling room.
+  - *Weight* — kg per unit; loading stops at the container's max payload and the tool
+    says how many units were left off for weight.
+  - *Do not stack* — nothing is placed on top of that item.
+  - *This side up* — the item only rotates around its vertical axis.
+  - *Load sequence* — for multi-drop consolidation: sequence 1 goes in first at the back,
+    and each later sequence starts in front of everything loaded before it, so an early
+    stop's cargo is never buried behind a later one's.
 - **Load indicator** at the top of the 3D view shows how full the container is (% of
-  volume) and turns red when units don't fit.
+  volume, plus % of payload when weights are set) and turns red when units don't fit.
+- **1 m reference grid** on the container walls, floor and ceiling, with labelled ticks.
 - Everything is saved in the browser (localStorage), so a plan survives a reload.
 
 ## Planned stack

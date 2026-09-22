@@ -5,6 +5,8 @@ export interface ContainerDims {
   length: number
   width: number
   height: number
+  /** Maximum cargo weight in kg. Omitted or 0 = no weight check. */
+  maxPayload?: number
 }
 
 export interface ContainerPreset extends ContainerDims {
@@ -22,6 +24,14 @@ export interface Item {
   /** When true the item may only rotate around its vertical axis. */
   keepUpright: boolean
   color: string
+  /** Horizontal spacing between units, cm. Half of it is kept from walls too. */
+  gap?: number
+  /** Weight of one unit, kg. */
+  weightKg?: number
+  /** When false nothing may be placed on top of this item. Defaults to true. */
+  stackable?: boolean
+  /** Load sequence: 1 is loaded first (back wall), higher numbers nearer the doors. */
+  sequence?: number
 }
 
 export interface Placement {
@@ -45,4 +55,8 @@ export interface PackResult {
   usedVolume: number
   /** Furthest x reached by any placed box — how much floor length is used. */
   usedLength: number
+  /** Total weight of placed units, kg. */
+  totalWeight: number
+  /** itemId → units left out only because the payload limit was reached. */
+  overweight: Record<string, number>
 }

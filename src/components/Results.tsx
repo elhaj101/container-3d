@@ -2,6 +2,7 @@ import type { ContainerDims, Item, PackResult } from '../lib/types'
 import { usePlanner } from '../store'
 
 const m3 = (cm3: number) => (cm3 / 1e6).toFixed(2)
+const kg = (n: number) => `${Math.round(n).toLocaleString('en')} kg`
 
 export function Results({ result, items, container }: { result: PackResult; items: Item[]; container: ContainerDims }) {
   const { visibleCount, setVisibleCount } = usePlanner()
@@ -13,9 +14,15 @@ export function Results({ result, items, container }: { result: PackResult; item
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Stat label="Volume used" value={`${pct.toFixed(1)}%`} sub={`${m3(result.usedVolume)} of ${m3(result.containerVolume)} m³`} />
         <Stat label="Free volume" value={`${m3(result.containerVolume - result.usedVolume)} m³`} />
+        <Stat
+          label="Cargo weight"
+          value={`${kg(result.totalWeight)}`}
+          sub={container.maxPayload ? `of ${kg(container.maxPayload)} max payload` : 'no payload limit set'}
+          warn={Object.keys(result.overweight).length > 0}
+        />
         <Stat label="Free floor at doors" value={`${(freeLength / 100).toFixed(2)} m`} sub="green region in 3D" />
         <Stat
           label="Packed"
@@ -110,22 +117,29 @@ function PlacementList({ result, items, shown }: { result: PackResult; items: It
 }
 
 // Always-visible headline over the 3D view: how loaded the container is, in plain words.
-export function LoadIndicator({ result }: { result: PackResult }) {
+export function LoadIndicator({ result, container }: { result: PackResult; container: ContainerDims }) {
   const pct = result.containerVolume ? (result.usedVolume / result.containerVolume) * 100 : 0
   const unplaced = Object.values(result.unplaced).reduce((a, b) => a + b, 0)
+  const overweight = Object.values(result.overweight).reduce((a, b) => a + b, 0)
   const free = m3(result.containerVolume - result.usedVolume)
+  const weightPct =
+    container.maxPayload && result.totalWeight > 0 ? (result.totalWeight / container.maxPayload) * 100 : null
+  const weightNote = weightPct !== null ? ` · weight ${weightPct.toFixed(0)}% of payload` : ''
 
   let tone = 'border-sky-500/40 bg-sky-950/80 text-sky-100'
-  let message = `Container is ${pct.toFixed(1)}% loaded, ${free} m³ still free`
+  let message = `Container is ${pct.toFixed(1)}% loaded, ${free} m³ still free${weightNote}`
   if (result.placements.length === 0 && unplaced === 0) {
     tone = 'border-slate-600 bg-slate-900/80 text-slate-300'
     message = 'Container is empty (0% loaded). Add items to start packing'
+  } else if (overweight > 0) {
+    tone = 'border-rose-500/50 bg-rose-950/80 text-rose-100'
+    message = `Payload limit reached (${kg(result.totalWeight)}) at ${pct.toFixed(1)}% of volume. ${overweight} unit${overweight === 1 ? '' : 's'} left off for weight`
   } else if (unplaced > 0) {
     tone = 'border-rose-500/50 bg-rose-950/80 text-rose-100'
-    message = `Container is ${pct.toFixed(1)}% loaded. ${unplaced} unit${unplaced === 1 ? '' : 's'} won't fit in the space left`
-  } else if (pct >= 85) {
+    message = `Container is ${pct.toFixed(1)}% loaded. ${unplaced} unit${unplaced === 1 ? '' : 's'} won't fit in the space left${weightNote}`
+  } else if (pct >= 85 || (weightPct ?? 0) >= 90) {
     tone = 'border-emerald-500/50 bg-emerald-950/80 text-emerald-100'
-    message = `Container is ${pct.toFixed(1)}% loaded, nearly full (${free} m³ free)`
+    message = `Container is ${pct.toFixed(1)}% loaded, nearly full (${free} m³ free)${weightNote}`
   }
 
   return (
