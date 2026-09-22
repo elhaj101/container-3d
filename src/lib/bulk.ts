@@ -14,6 +14,8 @@ export interface BulkParseResult {
 const NUM = String.raw`(\d+(?:[.,]\d+)?)`
 const DIMS = new RegExp(String.raw`${NUM}\s*[x×*]\s*${NUM}\s*[x×*]\s*${NUM}`, 'i')
 const UPRIGHT = /\b(upright|this side up|keep upright)\b/i
+const ROUND = /Ø|\b(round|cylinder|drums?|barrels?|kegs?|rolls?|reels?)\b/i
+const DIMS2 = new RegExp(String.raw`${NUM}\s*[x×*]\s*${NUM}`, 'i')
 const WEIGHT = new RegExp(String.raw`${NUM}\s*kg\b`, 'i')
 
 const toNum = (s: string) => Number(s.replace(',', '.'))
@@ -23,7 +25,9 @@ const toNum = (s: string) => Number(s.replace(',', '.'))
  *   Name, L, W, H, Qty, Weight   (comma, semicolon or tab separated — spreadsheet paste works)
  *   Name 40x30x30 x5 12kg        (dimensions joined by x/×, quantity after)
  * Name, quantity and weight (kg per unit) are optional; quantity defaults to 1.
- * Add "upright" to lock orientation.
+ * Add "upright" to lock orientation. Lines naming a drum, barrel, keg, roll or reel, or
+ * saying "round", are round items: diameter × length (Ø60x90) or L×W×H using the larger of
+ * L and W as the diameter.
  * Header rows and blank lines are skipped.
  */
 export function parseBulk(text: string): BulkParseResult {
@@ -34,6 +38,7 @@ export function parseBulk(text: string): BulkParseResult {
     const line = raw.trim()
     if (!line || line.startsWith('#')) return
     const keepUpright = UPRIGHT.test(line)
+    const round = ROUND.test(line)
     let clean = line.replace(UPRIGHT, '').trim()
     let weightKg: number | undefined
     const w = clean.match(WEIGHT)
@@ -47,8 +52,18 @@ export function parseBulk(text: string): BulkParseResult {
     let dims: number[] | null = null
     let quantity = 1
 
-    const m = clean.match(DIMS)
-    if (m) {
+    let m = clean.match(DIMS)
+    // Round items are usually given as Ø×length; don't mistake "Ø40x250 x3" for three sizes.
+    const twoDims = round && (clean.includes('Ø') || (m !== null && /^\S+[x×*]\S+\s[x×*]/i.test(m[0])))
+    const m2 = twoDims || (!m && round) ? clean.match(DIMS2) : null
+    if (m2) m = null
+    if (m2) {
+      const [d, h] = [toNum(m2[1]), toNum(m2[2])]
+      dims = [d, d, h]
+      name = clean.slice(0, m2.index).replace(/[\s,;:\t-]+$/, '').replace(/Ø\s*$/, '').trim()
+      const q = clean.slice(m2.index! + m2[0].length).match(/\d+/)
+      if (q) quantity = Number(q[0])
+    } else if (m) {
       dims = [toNum(m[1]), toNum(m[2]), toNum(m[3])]
       name = clean.slice(0, m.index).replace(/[\s,;:\t-]+$/, '').trim()
       const q = clean.slice(m.index! + m[0].length).match(/\d+/)
@@ -68,14 +83,16 @@ export function parseBulk(text: string): BulkParseResult {
       errors.push({ line: i + 1, text: raw })
       return
     }
-    const [length, width, height] = dims
+    let [length, width, height] = dims
+    if (round) length = width = Math.max(length, width)
     entries.push({
       preset: {
-        name: name || `${length}×${width}×${height}`,
+        name: name || (round ? `Ø${length}×${height}` : `${length}×${width}×${height}`),
         length,
         width,
         height,
         keepUpright,
+        ...(round && { shape: 'cylinder' as const }),
         ...(weightKg !== undefined && { weightKg }),
       },
       quantity: Math.floor(quantity),

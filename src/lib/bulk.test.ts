@@ -47,3 +47,19 @@ describe('parseBulk — weights', () => {
     expect(entries[1].quantity).toBe(5)
   })
 })
+
+describe('parseBulk — round items', () => {
+  it('treats drums, rolls and "round" lines as cylinders', () => {
+    const { entries } = parseBulk('Oil drum 60x60x90 x20 upright\nCarpet roll Ø40x250 x3\nPipe round, 30, 30, 600, 4')
+    expect(entries.map((e) => [e.preset.shape, e.preset.length, e.preset.width, e.preset.height, e.quantity])).toEqual([
+      ['cylinder', 60, 60, 90, 20],
+      ['cylinder', 40, 40, 250, 3],
+      ['cylinder', 30, 30, 600, 4],
+    ])
+    expect(entries[1].preset.name).toBe('Carpet roll')
+  })
+
+  it('leaves ordinary boxes alone', () => {
+    expect(parseBulk('Box 40x30x30').entries[0].preset.shape).toBeUndefined()
+  })
+})

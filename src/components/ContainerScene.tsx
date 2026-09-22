@@ -148,38 +148,87 @@ function MeterMarks({ L, W, H }: { L: number; W: number; H: number }) {
   )
 }
 
-// All boxes render as one instanced mesh plus one merged line geometry for the outlines,
-// so a full container of a couple of thousand cartons stays at two draw calls.
+// Axis a round item lies along, from its placed size: the side matching its length.
+function cylinderAxis(p: Placement, item: Item): 'x' | 'y' | 'z' {
+  if (Math.abs(p.dy - item.height) < 1e-6) return 'y'
+  if (Math.abs(p.dx - item.height) < 1e-6) return 'x'
+  return 'z'
+}
+
+const Q_Y = new THREE.Quaternion()
+const Q_X = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+const Q_Z = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)
+
+const capacityFor = (n: number) => Math.max(64, 2 ** Math.ceil(Math.log2(n + 1)))
+
+// All items render as two instanced meshes (boxes, round items) plus one merged line
+// geometry for box outlines, so a full container of a couple of thousand units stays at
+// a handful of draw calls.
 function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<string, Item> }) {
-  const meshRef = useRef<THREE.InstancedMesh>(null)
+  const boxRef = useRef<THREE.InstancedMesh>(null)
+  const cylRef = useRef<THREE.InstancedMesh>(null)
   const [hovered, setHovered] = useState<number | null>(null)
-  // Capacity only grows, so the InstancedMesh isn't recreated on every small edit.
-  const capacity = useMemo(() => Math.max(64, 2 ** Math.ceil(Math.log2(placements.length + 1))), [placements.length])
+
+  // Placement indices per shape; instance i of a mesh maps back through these.
+  const { boxIdx, cylIdx } = useMemo(() => {
+    const boxIdx: number[] = []
+    const cylIdx: number[] = []
+    placements.forEach((p, i) => (byId.get(p.itemId)?.shape === 'cylinder' ? cylIdx : boxIdx).push(i))
+    return { boxIdx, cylIdx }
+  }, [placements, byId])
+  // Capacity only grows in steps, so meshes aren't recreated on every small edit.
+  const boxCap = capacityFor(boxIdx.length)
+  const cylCap = capacityFor(cylIdx.length)
 
   useLayoutEffect(() => {
-    const mesh = meshRef.current
-    if (!mesh) return
     const m = new THREE.Matrix4()
+    const pos = new THREE.Vector3()
+    const scale = new THREE.Vector3()
     const color = new THREE.Color()
-    placements.forEach((p, i) => {
-      // Inset slightly so neighbouring boxes read as separate objects.
-      const sx = Math.max(p.dx * M - 0.01, p.dx * M * 0.98)
-      const sy = Math.max(p.dy * M - 0.01, p.dy * M * 0.98)
-      const sz = Math.max(p.dz * M - 0.01, p.dz * M * 0.98)
-      m.makeScale(sx, sy, sz).setPosition((p.x + p.dx / 2) * M, (p.y + p.dy / 2) * M, (p.z + p.dz / 2) * M)
-      mesh.setMatrixAt(i, m)
-      mesh.setColorAt(i, color.set(byId.get(p.itemId)?.color ?? '#999999'))
-    })
-    mesh.count = placements.length
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-    mesh.computeBoundingSphere()
-  }, [placements, byId, capacity])
+    // Inset slightly so neighbouring units read as separate objects.
+    const inset = (v: number) => Math.max(v * M - 0.01, v * M * 0.98)
+
+    const box = boxRef.current
+    if (box) {
+      boxIdx.forEach((pi, i) => {
+        const p = placements[pi]
+        pos.set((p.x + p.dx / 2) * M, (p.y + p.dy / 2) * M, (p.z + p.dz / 2) * M)
+        m.compose(pos, Q_Y, scale.set(inset(p.dx), inset(p.dy), inset(p.dz)))
+        box.setMatrixAt(i, m)
+        box.setColorAt(i, color.set(byId.get(p.itemId)?.color ?? '#999999'))
+      })
+      box.count = boxIdx.length
+      box.instanceMatrix.needsUpdate = true
+      if (box.instanceColor) box.instanceColor.needsUpdate = true
+      box.computeBoundingSphere()
+    }
+
+    const cyl = cylRef.current
+    if (cyl) {
+      cylIdx.forEach((pi, i) => {
+        const p = placements[pi]
+        const item = byId.get(p.itemId)!
+        const axis = cylinderAxis(p, item)
+        pos.set((p.x + p.dx / 2) * M, (p.y + p.dy / 2) * M, (p.z + p.dz / 2) * M)
+        // The unit cylinder's axis is local y; scale (radial, axis, radial) then rotate.
+        if (axis === 'y') m.compose(pos, Q_Y, scale.set(inset(p.dx), inset(p.dy), inset(p.dz)))
+        else if (axis === 'x') m.compose(pos, Q_X, scale.set(inset(p.dy), inset(p.dx), inset(p.dz)))
+        else m.compose(pos, Q_Z, scale.set(inset(p.dx), inset(p.dz), inset(p.dy)))
+        cyl.setMatrixAt(i, m)
+        cyl.setColorAt(i, color.set(item.color))
+      })
+      cyl.count = cylIdx.length
+      cyl.instanceMatrix.needsUpdate = true
+      if (cyl.instanceColor) cyl.instanceColor.needsUpdate = true
+      cyl.computeBoundingSphere()
+    }
+  }, [placements, byId, boxIdx, cylIdx, boxCap, cylCap])
 
   const edges = useMemo(() => {
-    const pos = new Float32Array(placements.length * 24 * 3)
+    const pos = new Float32Array(boxIdx.length * 24 * 3)
     let o = 0
-    for (const p of placements) {
+    for (const pi of boxIdx) {
+      const p = placements[pi]
       const x0 = p.x * M, x1 = (p.x + p.dx) * M
       const y0 = p.y * M, y1 = (p.y + p.dy) * M
       const z0 = p.z * M, z1 = (p.z + p.dz) * M
@@ -196,25 +245,28 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
     return g
-  }, [placements])
+  }, [placements, boxIdx])
   useEffect(() => () => edges.dispose(), [edges])
+
+  const hoverHandlers = (idx: number[]) => ({
+    onPointerMove: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation()
+      if (e.instanceId !== undefined && idx[e.instanceId] !== hovered) setHovered(idx[e.instanceId])
+    },
+    onPointerOut: () => setHovered(null),
+  })
 
   const hp = hovered !== null ? placements[hovered] : undefined
   const hItem = hp && byId.get(hp.itemId)
 
   return (
     <>
-      <instancedMesh
-        key={capacity}
-        ref={meshRef}
-        args={[undefined, undefined, capacity]}
-        onPointerMove={(e: ThreeEvent<PointerEvent>) => {
-          e.stopPropagation()
-          if (e.instanceId !== undefined && e.instanceId !== hovered) setHovered(e.instanceId)
-        }}
-        onPointerOut={() => setHovered(null)}
-      >
+      <instancedMesh key={`b${boxCap}`} ref={boxRef} args={[undefined, undefined, boxCap]} {...hoverHandlers(boxIdx)}>
         <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial />
+      </instancedMesh>
+      <instancedMesh key={`c${cylCap}`} ref={cylRef} args={[undefined, undefined, cylCap]} {...hoverHandlers(cylIdx)}>
+        <cylinderGeometry args={[0.5, 0.5, 1, 28]} />
         <meshStandardMaterial />
       </instancedMesh>
       <lineSegments geometry={edges}>
@@ -223,14 +275,16 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
       {hp && hItem && (
         <mesh position={[(hp.x + hp.dx / 2) * M, (hp.y + hp.dy / 2) * M, (hp.z + hp.dz / 2) * M]} raycast={() => null}>
           <boxGeometry args={[hp.dx * M + 0.01, hp.dy * M + 0.01, hp.dz * M + 0.01]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.25} depthWrite={false} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={hItem.shape === 'cylinder' ? 0.12 : 0.25} depthWrite={false} />
           <Html center distanceFactor={8} style={{ pointerEvents: 'none' }}>
             <div className="rounded-md bg-slate-900/90 px-2 py-1 text-xs whitespace-nowrap text-slate-100 shadow-lg">
               <div className="font-medium">
                 {hItem.name} #{hp.unit}
               </div>
               <div className="text-slate-400">
-                {hItem.length}×{hItem.width}×{hItem.height} cm
+                {hItem.shape === 'cylinder'
+                  ? `Ø${hItem.length} × ${hItem.height} cm`
+                  : `${hItem.length}×${hItem.width}×${hItem.height} cm`}
               </div>
             </div>
           </Html>

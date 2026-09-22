@@ -131,12 +131,26 @@ function ItemList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
                 ✕
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              <NumField label="L (cm)" value={it.length} onChange={(length) => updateItem(it.id, { length })} min={1} />
-              <NumField label="W (cm)" value={it.width} onChange={(width) => updateItem(it.id, { width })} min={1} />
-              <NumField label="H (cm)" value={it.height} onChange={(height) => updateItem(it.id, { height })} min={1} />
-              <NumField label="Qty" value={it.quantity} onChange={(quantity) => updateItem(it.id, { quantity: Math.floor(quantity) })} />
-            </div>
+            <ShapeToggle
+              shape={it.shape ?? 'box'}
+              onChange={(shape) =>
+                updateItem(it.id, shape === 'cylinder' ? { shape, width: it.length } : { shape })
+              }
+            />
+            {it.shape === 'cylinder' ? (
+              <div className="grid grid-cols-3 gap-2">
+                <NumField label="Ø (cm)" value={it.length} onChange={(d) => updateItem(it.id, { length: d, width: d })} min={1} />
+                <NumField label="Length (cm)" value={it.height} onChange={(height) => updateItem(it.id, { height })} min={1} />
+                <NumField label="Qty" value={it.quantity} onChange={(quantity) => updateItem(it.id, { quantity: Math.floor(quantity) })} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                <NumField label="L (cm)" value={it.length} onChange={(length) => updateItem(it.id, { length })} min={1} />
+                <NumField label="W (cm)" value={it.width} onChange={(width) => updateItem(it.id, { width })} min={1} />
+                <NumField label="H (cm)" value={it.height} onChange={(height) => updateItem(it.id, { height })} min={1} />
+                <NumField label="Qty" value={it.quantity} onChange={(quantity) => updateItem(it.id, { quantity: Math.floor(quantity) })} />
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-between text-xs">
               <label className="flex cursor-pointer items-center gap-1.5 text-slate-400">
                 <input
@@ -145,7 +159,7 @@ function ItemList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
                   onChange={(e) => updateItem(it.id, { keepUpright: e.target.checked })}
                   className="accent-sky-500"
                 />
-                This side up
+                {it.shape === 'cylinder' ? 'Stand on end' : 'This side up'}
               </label>
               {unplaced[it.id] > 0 && (
                 <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-rose-300">
@@ -160,6 +174,23 @@ function ItemList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
         ))}
       </ul>
     </Section>
+  )
+}
+
+function ShapeToggle({ shape, onChange }: { shape: 'box' | 'cylinder'; onChange: (s: 'box' | 'cylinder') => void }) {
+  return (
+    <div className="mb-2 inline-flex rounded border border-slate-700 p-0.5 text-[11px]">
+      {(['box', 'cylinder'] as const).map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onChange(s)}
+          className={`rounded px-2 py-0.5 ${shape === s ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          {s === 'box' ? '▭ Box' : '◯ Round'}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -235,32 +266,45 @@ function CustomAdder() {
   const [dims, setDims] = useState({ length: 50, width: 40, height: 40 })
   const [qty, setQty] = useState(1)
   const [keepUpright, setKeepUpright] = useState(false)
+  const [shape, setShape] = useState<'box' | 'cylinder'>('box')
+  const round = shape === 'cylinder'
 
   return (
     <form
       className="flex flex-col gap-2 rounded-lg border border-slate-800 p-3"
       onSubmit={(e) => {
         e.preventDefault()
-        addItem({ name: name.trim() || `${dims.length}×${dims.width}×${dims.height}`, ...dims, keepUpright }, qty)
+        const d = round ? { ...dims, width: dims.length } : dims
+        const fallback = round ? `Ø${d.length}×${d.height}` : `${d.length}×${d.width}×${d.height}`
+        addItem({ name: name.trim() || fallback, ...d, keepUpright, ...(round && { shape }) }, qty)
         setName('')
       }}
     >
+      <ShapeToggle shape={shape} onChange={setShape} />
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Name (optional)"
         className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500"
       />
-      <div className="grid grid-cols-4 gap-2">
-        <NumField label="L (cm)" value={dims.length} onChange={(length) => setDims({ ...dims, length })} min={1} />
-        <NumField label="W (cm)" value={dims.width} onChange={(width) => setDims({ ...dims, width })} min={1} />
-        <NumField label="H (cm)" value={dims.height} onChange={(height) => setDims({ ...dims, height })} min={1} />
-        <NumField label="Qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
-      </div>
+      {round ? (
+        <div className="grid grid-cols-3 gap-2">
+          <NumField label="Ø (cm)" value={dims.length} onChange={(length) => setDims({ ...dims, length })} min={1} />
+          <NumField label="Length (cm)" value={dims.height} onChange={(height) => setDims({ ...dims, height })} min={1} />
+          <NumField label="Qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 gap-2">
+          <NumField label="L (cm)" value={dims.length} onChange={(length) => setDims({ ...dims, length })} min={1} />
+          <NumField label="W (cm)" value={dims.width} onChange={(width) => setDims({ ...dims, width })} min={1} />
+          <NumField label="H (cm)" value={dims.height} onChange={(height) => setDims({ ...dims, height })} min={1} />
+          <NumField label="Qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400">
           <input type="checkbox" checked={keepUpright} onChange={(e) => setKeepUpright(e.target.checked)} className="accent-sky-500" />
-          This side up
+          {round ? 'Stand on end' : 'This side up'}
         </label>
         <button type="submit" className={primaryBtn}>
           Add item
@@ -276,9 +320,10 @@ interface BatchOptions {
   sequence: number
   keepUpright: boolean
   noStack: boolean
+  round: boolean
 }
 
-const DEFAULT_BATCH: BatchOptions = { gap: 0, weightKg: 0, sequence: 1, keepUpright: false, noStack: false }
+const DEFAULT_BATCH: BatchOptions = { gap: 0, weightKg: 0, sequence: 1, keepUpright: false, noStack: false, round: false }
 
 function BulkAdder() {
   const addItems = usePlanner((s) => s.addItems)
@@ -294,7 +339,7 @@ function BulkAdder() {
         onChange={(e) => setText(e.target.value)}
         rows={5}
         spellCheck={false}
-        placeholder={'One item per line, e.g.\nBox A, 40, 30, 30, 12, 8.5\nTV 120x20x75 x2 18kg\nFridge 70x70x180 1 upright'}
+        placeholder={'One item per line, e.g.\nBox A, 40, 30, 30, 12, 8.5\nTV 120x20x75 x2 18kg\nOil drum Ø60x90 x20 upright'}
         className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500"
       />
       <p className="text-[11px] text-slate-500">
@@ -320,10 +365,15 @@ function BulkAdder() {
             <input type="checkbox" checked={opts.noStack} onChange={(e) => set({ noStack: e.target.checked })} className="accent-sky-500" />
             Do not stack
           </label>
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <input type="checkbox" checked={opts.round} onChange={(e) => set({ round: e.target.checked })} className="accent-sky-500" />
+            Round (drums, rolls)
+          </label>
         </div>
         <p className="text-[11px] leading-snug text-slate-500">
           Spacing is kept between units side by side (half of it from the walls), for airflow or
-          dunnage. Weight applies to lines that don't give their own. Load sequence 1 goes in first
+          dunnage. Weight applies to lines that don't give their own. Lines mentioning a drum,
+          barrel, roll or reel are treated as round automatically. Load sequence 1 goes in first
           at the back; use higher numbers for the cargo that comes off first at the doors.
         </p>
       </fieldset>
@@ -342,6 +392,11 @@ function BulkAdder() {
               quantity,
               preset: {
                 ...preset,
+                ...(opts.round && {
+                  shape: 'cylinder' as const,
+                  length: Math.max(preset.length, preset.width),
+                  width: Math.max(preset.length, preset.width),
+                }),
                 keepUpright: preset.keepUpright || opts.keepUpright,
                 weightKg: preset.weightKg ?? (opts.weightKg || undefined),
                 gap: opts.gap || undefined,

@@ -31,7 +31,8 @@ export const ITEM_PRESETS: ItemPreset[] = [
   { name: 'Washing machine', length: 60, width: 60, height: 85, keepUpright: true },
   { name: 'Fridge', length: 70, width: 70, height: 180, keepUpright: true },
   { name: 'Sofa (3-seat)', length: 210, width: 95, height: 85, keepUpright: false },
-  { name: '200 L drum', length: 60, width: 60, height: 90, keepUpright: true },
+  { name: '200 L drum', length: 60, width: 60, height: 90, keepUpright: true, shape: 'cylinder' },
+  { name: 'Carpet roll', length: 40, width: 40, height: 250, keepUpright: false, shape: 'cylinder' },
 ]
 
 export const ITEM_COLORS = [

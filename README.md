@@ -29,6 +29,11 @@ npm run build   # static build in dist/
   item per line, e.g. `Box A, 40, 30, 30, 12, 8.5` (name, L, W, H, qty, kg per unit),
   tab-separated rows copied from a spreadsheet, or `TV 120x20x75 x2 18kg`. Add `upright`
   to a line to lock its orientation.
+- **Round items** (drums, barrels, rolls, reels) toggle to "Round": enter a diameter and a
+  length, and they render as cylinders — standing on end when "Stand on end" is ticked,
+  lying down otherwise. Pasted lines that mention a drum, barrel, roll or reel (or use
+  `Ø60x90`) are round automatically. Packing uses their square footprint (Ø × Ø), the
+  usual straight-row stow; staggered/nested drum patterns aren't modelled.
 - **Freight options**, set per batch when bulk pasting and editable per item afterwards:
   - *Spacing* — horizontal clearance between units (half of it kept from the walls), for
     airflow, dunnage or handling room.

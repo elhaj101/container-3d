@@ -21,8 +21,13 @@ export interface Item {
   width: number
   height: number
   quantity: number
-  /** When true the item may only rotate around its vertical axis. */
+  /** When true the item may only rotate around its vertical axis (round items stand on end). */
   keepUpright: boolean
+  /**
+   * 'cylinder' = round item (drum, barrel, roll): length = width = diameter, height = length
+   * along its axis. Packed by its square footprint, rendered round. Defaults to 'box'.
+   */
+  shape?: 'box' | 'cylinder'
   color: string
   /** Horizontal spacing between units, cm. Half of it is kept from walls too. */
   gap?: number
