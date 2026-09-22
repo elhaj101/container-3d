@@ -1,6 +1,7 @@
 import { Edges, Grid, Html, OrbitControls } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { useState } from 'react'
+import { Canvas, type ThreeEvent } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
 import type { ContainerDims, Item, Placement } from '../lib/types'
 
 // Scene units are metres; the packer works in centimetres.
@@ -18,7 +19,7 @@ export function ContainerScene({ container, items, placements, usedLength }: Pro
   const W = container.width * M
   const H = container.height * M
   const span = Math.max(L, W, H)
-  const byId = new Map(items.map((i) => [i.id, i]))
+  const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
   const freeLength = L - usedLength * M
 
   return (
@@ -34,9 +35,7 @@ export function ContainerScene({ container, items, placements, usedLength }: Pro
       {/* Shift so the container is centred on the origin. */}
       <group position={[-L / 2, 0, -W / 2]}>
         <ContainerShell L={L} W={W} H={H} />
-        {placements.map((p) => (
-          <PlacedBox key={`${p.itemId}-${p.unit}`} placement={p} item={byId.get(p.itemId)} />
-        ))}
+        <PlacedBoxes placements={placements} byId={byId} />
         {freeLength > 0.01 && (
           <mesh position={[usedLength * M + freeLength / 2, H / 2, W / 2]}>
             <boxGeometry args={[freeLength, H, W]} />
@@ -85,36 +84,94 @@ function ContainerShell({ L, W, H }: { L: number; W: number; H: number }) {
   )
 }
 
-function PlacedBox({ placement: p, item }: { placement: Placement; item?: Item }) {
-  const [hovered, setHovered] = useState(false)
-  const size: [number, number, number] = [p.dx * M, p.dy * M, p.dz * M]
-  // Inset slightly so neighbouring boxes read as separate objects.
-  const inset = size.map((s) => Math.max(s - 0.01, s * 0.98)) as [number, number, number]
+// All boxes render as one instanced mesh plus one merged line geometry for the outlines,
+// so a full container of a couple of thousand cartons stays at two draw calls.
+function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<string, Item> }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null)
+  const [hovered, setHovered] = useState<number | null>(null)
+  // Capacity only grows, so the InstancedMesh isn't recreated on every small edit.
+  const capacity = useMemo(() => Math.max(64, 2 ** Math.ceil(Math.log2(placements.length + 1))), [placements.length])
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+    const m = new THREE.Matrix4()
+    const color = new THREE.Color()
+    placements.forEach((p, i) => {
+      // Inset slightly so neighbouring boxes read as separate objects.
+      const sx = Math.max(p.dx * M - 0.01, p.dx * M * 0.98)
+      const sy = Math.max(p.dy * M - 0.01, p.dy * M * 0.98)
+      const sz = Math.max(p.dz * M - 0.01, p.dz * M * 0.98)
+      m.makeScale(sx, sy, sz).setPosition((p.x + p.dx / 2) * M, (p.y + p.dy / 2) * M, (p.z + p.dz / 2) * M)
+      mesh.setMatrixAt(i, m)
+      mesh.setColorAt(i, color.set(byId.get(p.itemId)?.color ?? '#999999'))
+    })
+    mesh.count = placements.length
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [placements, byId, capacity])
+
+  const edges = useMemo(() => {
+    const pos = new Float32Array(placements.length * 24 * 3)
+    let o = 0
+    for (const p of placements) {
+      const x0 = p.x * M, x1 = (p.x + p.dx) * M
+      const y0 = p.y * M, y1 = (p.y + p.dy) * M
+      const z0 = p.z * M, z1 = (p.z + p.dz) * M
+      const c = [
+        [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
+        [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1],
+      ]
+      for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) {
+        pos.set(c[a], o)
+        pos.set(c[b], o + 3)
+        o += 6
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    return g
+  }, [placements])
+  useEffect(() => () => edges.dispose(), [edges])
+
+  const hp = hovered !== null ? placements[hovered] : undefined
+  const hItem = hp && byId.get(hp.itemId)
 
   return (
-    <mesh
-      position={[(p.x + p.dx / 2) * M, (p.y + p.dy / 2) * M, (p.z + p.dz / 2) * M]}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        setHovered(true)
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      <boxGeometry args={inset} />
-      <meshStandardMaterial color={item?.color ?? '#999'} emissive={hovered ? '#ffffff' : '#000000'} emissiveIntensity={hovered ? 0.25 : 0} />
-      <Edges color="#000000" transparent opacity={0.35} />
-      {hovered && item && (
-        <Html center distanceFactor={8} style={{ pointerEvents: 'none' }}>
-          <div className="rounded-md bg-slate-900/90 px-2 py-1 text-xs whitespace-nowrap text-slate-100 shadow-lg">
-            <div className="font-medium">
-              {item.name} #{p.unit}
+    <>
+      <instancedMesh
+        key={capacity}
+        ref={meshRef}
+        args={[undefined, undefined, capacity]}
+        onPointerMove={(e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation()
+          if (e.instanceId !== undefined && e.instanceId !== hovered) setHovered(e.instanceId)
+        }}
+        onPointerOut={() => setHovered(null)}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial />
+      </instancedMesh>
+      <lineSegments geometry={edges}>
+        <lineBasicMaterial color="#000000" transparent opacity={0.3} />
+      </lineSegments>
+      {hp && hItem && (
+        <mesh position={[(hp.x + hp.dx / 2) * M, (hp.y + hp.dy / 2) * M, (hp.z + hp.dz / 2) * M]} raycast={() => null}>
+          <boxGeometry args={[hp.dx * M + 0.01, hp.dy * M + 0.01, hp.dz * M + 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.25} depthWrite={false} />
+          <Html center distanceFactor={8} style={{ pointerEvents: 'none' }}>
+            <div className="rounded-md bg-slate-900/90 px-2 py-1 text-xs whitespace-nowrap text-slate-100 shadow-lg">
+              <div className="font-medium">
+                {hItem.name} #{hp.unit}
+              </div>
+              <div className="text-slate-400">
+                {hItem.length}×{hItem.width}×{hItem.height} cm
+              </div>
             </div>
-            <div className="text-slate-400">
-              {item.length}×{item.width}×{item.height} cm
-            </div>
-          </div>
-        </Html>
+          </Html>
+        </mesh>
       )}
-    </mesh>
+    </>
   )
 }

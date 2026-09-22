@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useDeferredValue, useMemo } from 'react'
 import { ContainerScene } from './components/ContainerScene'
 import { LoadIndicator, Results } from './components/Results'
 import { Sidebar } from './components/Sidebar'
@@ -9,7 +9,12 @@ export default function App() {
   const container = useContainerDims()
   const items = usePlanner((s) => s.items)
   const visibleCount = usePlanner((s) => s.visibleCount)
-  const result = useMemo(() => pack(container, items), [container, items])
+  // Pack from a deferred copy so typing stays responsive on big loads, and only repack
+  // when something that affects packing changes (not names or colours).
+  const packItems = useDeferredValue(items)
+  const packKey = packItems.map((i) => `${i.id}:${i.length}:${i.width}:${i.height}:${i.quantity}:${i.keepUpright}`).join('|')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const result = useMemo(() => pack(container, packItems), [container, packKey])
   const visible = visibleCount === null ? result.placements : result.placements.slice(0, visibleCount)
   const visibleLength = visible.reduce((m, p) => Math.max(m, p.x + p.dx), 0)
 

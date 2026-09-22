@@ -10,6 +10,8 @@ remaining space shown live.
 v1 working locally: container presets + custom size, item presets, custom items (single or
 bulk paste), client-side packing, 3D view, live load indicator, load-order stepper.
 
+Live: https://elhaj101.github.io/container-3d/ (redeploys on every push to `main`)
+
 ## Run it
 
 ```bash

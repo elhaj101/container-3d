@@ -46,7 +46,7 @@ function overlaps1d(a: number, alen: number, b: number, blen: number) {
   return a < b + blen - EPS && b < a + alen - EPS
 }
 
-function collides(p: Point, s: Size, placed: Placement[]) {
+function collides(p: Point, s: Size, placed: Iterable<Placement>) {
   for (const b of placed) {
     if (
       overlaps1d(p.x, s[0], b.x, b.dx) &&
@@ -59,11 +59,58 @@ function collides(p: Point, s: Size, placed: Placement[]) {
   return false
 }
 
+// Uniform grid over placed boxes so collision and support queries only scan neighbours.
+const CELL = 50
+
+class BoxGrid {
+  private cells = new Map<number, Placement[]>()
+
+  private static key(ix: number, iy: number, iz: number) {
+    return ix + iy * 1024 + iz * 1048576
+  }
+
+  private range(p: Point, s: Size) {
+    return [
+      Math.floor(p.x / CELL),
+      Math.floor((p.x + s[0] - EPS) / CELL),
+      Math.floor(p.y / CELL),
+      Math.floor((p.y + s[1] - EPS) / CELL),
+      Math.floor(p.z / CELL),
+      Math.floor((p.z + s[2] - EPS) / CELL),
+    ]
+  }
+
+  add(b: Placement) {
+    const [x0, x1, y0, y1, z0, z1] = this.range(b, [b.dx, b.dy, b.dz])
+    for (let ix = x0; ix <= x1; ix++)
+      for (let iy = y0; iy <= y1; iy++)
+        for (let iz = z0; iz <= z1; iz++) {
+          const k = BoxGrid.key(ix, iy, iz)
+          const cell = this.cells.get(k)
+          if (cell) cell.push(b)
+          else this.cells.set(k, [b])
+        }
+  }
+
+  /** Boxes whose cells overlap the region (may include duplicates and near misses). */
+  near(p: Point, s: Size): Set<Placement> {
+    const out = new Set<Placement>()
+    const [x0, x1, y0, y1, z0, z1] = this.range(p, s)
+    for (let ix = x0; ix <= x1; ix++)
+      for (let iy = y0; iy <= y1; iy++)
+        for (let iz = z0; iz <= z1; iz++) {
+          const cell = this.cells.get(BoxGrid.key(ix, iy, iz))
+          if (cell) for (const b of cell) out.add(b)
+        }
+    return out
+  }
+}
+
 function overlapLen(a: number, alen: number, b: number, blen: number) {
   return Math.max(0, Math.min(a + alen, b + blen) - Math.max(a, b))
 }
 
-function supportRatio(p: Point, s: Size, placed: Placement[]) {
+function supportRatio(p: Point, s: Size, placed: Iterable<Placement>) {
   if (p.y < EPS) return 1
   let area = 0
   for (const b of placed) {
@@ -74,7 +121,7 @@ function supportRatio(p: Point, s: Size, placed: Placement[]) {
 }
 
 // Slide a point toward the origin along one axis until it meets a box face or a wall.
-function project(p: Point, axis: 'x' | 'y' | 'z', placed: Placement[]): Point {
+function project(p: Point, axis: 'x' | 'y' | 'z', placed: Iterable<Placement>): Point {
   let best = 0
   for (const b of placed) {
     let face: number
@@ -94,7 +141,7 @@ function project(p: Point, axis: 'x' | 'y' | 'z', placed: Placement[]): Point {
   return { ...p, [axis]: best }
 }
 
-function newExtremePoints(b: Placement, placed: Placement[]): Point[] {
+function newExtremePoints(b: Placement, grid: BoxGrid): Point[] {
   const corners: [Point, ('x' | 'y' | 'z')[]][] = [
     [{ x: b.x + b.dx, y: b.y, z: b.z }, ['y', 'z']],
     [{ x: b.x, y: b.y + b.dy, z: b.z }, ['x', 'z']],
@@ -103,7 +150,13 @@ function newExtremePoints(b: Placement, placed: Placement[]): Point[] {
   const out: Point[] = []
   for (const [corner, axes] of corners) {
     out.push(corner)
-    for (const axis of axes) out.push(project(corner, axis, placed))
+    for (const axis of axes) {
+      // Only boxes along the line from the corner back to the wall can stop it.
+      const from = { ...corner, [axis]: 0 }
+      const size: Size = [EPS * 10, EPS * 10, EPS * 10]
+      size['xyz'.indexOf(axis)] = Math.max(corner[axis], EPS * 10)
+      out.push(project(corner, axis, grid.near(from, size)))
+    }
   }
   return out
 }
@@ -112,9 +165,17 @@ function pointKey(p: Point) {
   return `${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}`
 }
 
-// Lower is better: fill from the back wall, floor first, then across the width.
-function compare(a: Point & { s: Size }, b: Point & { s: Size }) {
-  return a.x - b.x || a.y - b.y || a.z - b.z || a.x + a.s[0] - (b.x + b.s[0])
+const byPreference = (a: Point, b: Point) => a.x - b.x || a.y - b.y || a.z - b.z
+
+function insertSorted(points: Point[], p: Point) {
+  let lo = 0
+  let hi = points.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (byPreference(points[mid], p) < 0) lo = mid + 1
+    else hi = mid
+  }
+  points.splice(lo, 0, p)
 }
 
 export function pack(container: ContainerDims, items: Item[]): PackResult {
@@ -135,28 +196,45 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     )
 
   const placed: Placement[] = []
+  const grid = new BoxGrid()
   const unplaced: Record<string, number> = {}
   let points: Point[] = [{ x: 0, y: 0, z: 0 }]
+  const pointKeys = new Set([pointKey(points[0])])
   const { length: L, width: W, height: H } = container
 
-  for (const { item, unit } of units) {
-    let best: (Point & { s: Size }) | null = null
+  let lastFailedItem: string | null = null
 
-    for (const s of orientations(item)) {
-      for (const p of points) {
+  for (const { item, unit } of units) {
+    // Units of one item are consecutive and nothing changes after a failure, so once
+    // one unit doesn't fit, the rest of that item won't either.
+    if (lastFailedItem === item.id) {
+      unplaced[item.id] = (unplaced[item.id] ?? 0) + 1
+      continue
+    }
+
+    // Points are kept sorted in placement preference order, so the first point with any
+    // valid orientation wins; among its orientations take the one reaching least far
+    // toward the doors.
+    let best: (Point & { s: Size }) | null = null
+    const sizes = orientations(item)
+    for (const p of points) {
+      for (const s of sizes) {
         if (p.x + s[0] > L + EPS || p.y + s[1] > H + EPS || p.z + s[2] > W + EPS) continue
-        const candidate = { ...p, s }
-        if (best && compare(candidate, best) >= 0) continue
-        if (collides(p, s, placed)) continue
-        if (supportRatio(p, s, placed) < MIN_SUPPORT) continue
-        best = candidate
+        if (best && s[0] >= best.s[0]) continue
+        if (collides(p, s, grid.near(p, s))) continue
+        // Supporting boxes sit just below the footprint.
+        if (p.y > EPS && supportRatio(p, s, grid.near({ ...p, y: p.y - 1 }, [s[0], 1, s[2]])) < MIN_SUPPORT) continue
+        best = { ...p, s }
       }
+      if (best) break
     }
 
     if (!best) {
       unplaced[item.id] = (unplaced[item.id] ?? 0) + 1
+      lastFailedItem = item.id
       continue
     }
+    lastFailedItem = null
 
     const placement: Placement = {
       itemId: item.id,
@@ -169,15 +247,22 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
       dz: best.s[2],
     }
     placed.push(placement)
+    grid.add(placement)
 
-    const keyed = new Map<string, Point>()
-    for (const p of [...points, ...newExtremePoints(placement, placed)]) {
+    // Only the new box can swallow an existing point; new points are checked against all.
+    const tiny: Size = [EPS * 10, EPS * 10, EPS * 10]
+    points = points.filter((p) => {
+      if (!collides(p, tiny, [placement])) return true
+      pointKeys.delete(pointKey(p))
+      return false
+    })
+    for (const p of newExtremePoints(placement, grid)) {
       if (p.x >= L - EPS || p.y >= H - EPS || p.z >= W - EPS) continue
-      // Drop points that now sit inside a placed box.
-      if (collides(p, [EPS * 10, EPS * 10, EPS * 10], placed)) continue
-      keyed.set(pointKey(p), p)
+      const key = pointKey(p)
+      if (pointKeys.has(key) || collides(p, tiny, grid.near(p, tiny))) continue
+      pointKeys.add(key)
+      insertSorted(points, p)
     }
-    points = [...keyed.values()]
   }
 
   const usedVolume = placed.reduce((sum, b) => sum + b.dx * b.dy * b.dz, 0)
