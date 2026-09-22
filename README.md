@@ -7,7 +7,28 @@ remaining space shown live.
 
 ## Status
 
-Early scaffold — repo just created, no app code yet.
+v1 working locally: container presets + custom size, item presets, custom items (single or
+bulk paste), client-side packing, 3D view, live load indicator, load-order stepper.
+
+## Run it
+
+```bash
+npm install
+npm run dev     # http://localhost:5173
+npm test        # packing engine + bulk-paste parser tests
+npm run build   # static build in dist/
+```
+
+## Using it
+
+- **Default items** are three standard shipping cartons: M 40×30×30, L 60×38×38,
+  XXL 75×42×41 cm. "Reset to M / L / XXL" restores them.
+- **Add items** three ways: pick a preset, enter one custom size, or **bulk paste** — one
+  item per line, e.g. `Box A, 40, 30, 30, 12`, tab-separated rows copied from a
+  spreadsheet, or `TV 120x20x75 x2`. Add `upright` to a line to lock its orientation.
+- **Load indicator** at the top of the 3D view shows how full the container is (% of
+  volume) and turns red when units don't fit.
+- Everything is saved in the browser (localStorage), so a plan survives a reload.
 
 ## Planned stack
 
