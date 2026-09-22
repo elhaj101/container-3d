@@ -35,6 +35,7 @@ export function ContainerScene({ container, items, placements, usedLength }: Pro
       {/* Shift so the container is centred on the origin. */}
       <group position={[-L / 2, 0, -W / 2]}>
         <ContainerShell L={L} W={W} H={H} />
+        <MeterMarks L={L} W={W} H={H} />
         <PlacedBoxes placements={placements} byId={byId} />
         {freeLength > 0.01 && (
           <mesh position={[usedLength * M + freeLength / 2, H / 2, W / 2]}>
@@ -80,6 +81,69 @@ function ContainerShell({ L, W, H }: { L: number; W: number; H: number }) {
           doors
         </span>
       </Html>
+    </group>
+  )
+}
+
+const meterSteps = (len: number) => Array.from({ length: Math.ceil(len - 0.001) - 1 }, (_, i) => i + 1)
+
+// A 1 m reference grid on the container's inner faces, with labelled ticks along one
+// edge per axis, so sizes and remaining space can be read straight off the 3D view.
+function MeterMarks({ L, W, H }: { L: number; W: number; H: number }) {
+  const { grid, ticks } = useMemo(() => {
+    const g: number[] = []
+    const t: number[] = []
+    const seg = (a: number[], b: number[], out = g) => out.push(...a, ...b)
+    const T = 0.12 // tick length, pointing out of the container
+
+    for (const x of meterSteps(L)) {
+      // Ring around the container at this length.
+      seg([x, 0, 0], [x, 0, W]); seg([x, H, 0], [x, H, W])
+      seg([x, 0, 0], [x, H, 0]); seg([x, 0, W], [x, H, W])
+      seg([x, 0, W], [x, 0, W + T], t)
+    }
+    for (const y of meterSteps(H)) {
+      seg([0, y, 0], [L, y, 0]); seg([0, y, W], [L, y, W])
+      seg([0, y, 0], [0, y, W]); seg([L, y, 0], [L, y, W])
+      seg([0, y, W], [-T, y, W], t)
+    }
+    for (const z of meterSteps(W)) {
+      seg([0, 0, z], [L, 0, z]); seg([0, H, z], [L, H, z])
+      seg([0, 0, z], [0, H, z]); seg([L, 0, z], [L, H, z])
+      seg([L, 0, z], [L + T, 0, z], t)
+    }
+    const geo = (arr: number[]) => {
+      const bg = new THREE.BufferGeometry()
+      bg.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+      return bg
+    }
+    return { grid: geo(g), ticks: geo(t) }
+  }, [L, W, H])
+  useEffect(
+    () => () => {
+      grid.dispose()
+      ticks.dispose()
+    },
+    [grid, ticks],
+  )
+
+  const label = (text: string, position: [number, number, number]) => (
+    <Html key={`${text}-${position.join()}`} position={position} center style={{ pointerEvents: 'none' }}>
+      <span className="text-[10px] whitespace-nowrap text-slate-400 tabular-nums">{text}</span>
+    </Html>
+  )
+
+  return (
+    <group>
+      <lineSegments geometry={grid} raycast={() => null}>
+        <lineBasicMaterial color="#8aa4c8" transparent opacity={0.16} depthWrite={false} />
+      </lineSegments>
+      <lineSegments geometry={ticks} raycast={() => null}>
+        <lineBasicMaterial color="#cbd5e1" />
+      </lineSegments>
+      {meterSteps(L).map((x) => label(`${x} m`, [x, 0, W + 0.3]))}
+      {meterSteps(H).map((y) => label(`${y} m`, [-0.3, y, W]))}
+      {meterSteps(W).map((z) => label(`${z} m`, [L + 0.3, 0, z]))}
     </group>
   )
 }
