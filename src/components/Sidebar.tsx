@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { parseBulk } from '../lib/bulk'
 import { CONTAINER_PRESETS, CUSTOM_CONTAINER_ID, ITEM_PRESETS } from '../lib/presets'
 import type { Item } from '../lib/types'
-import { usePlanner } from '../store'
+import { useContainerDims, usePlanner } from '../store'
 import { NumField } from './NumField'
 
 type Counts = Record<string, number>
@@ -11,84 +11,85 @@ export function Sidebar({ unplaced, overweight }: { unplaced: Counts; overweight
   return (
     <div className="flex flex-col gap-6">
       <ContainerPicker />
-      <ItemList unplaced={unplaced} overweight={overweight} />
+      <AddItems />
+      <LoadList unplaced={unplaced} overweight={overweight} />
     </div>
   )
 }
 
-function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
+function ContainerPicker() {
+  const { containerId, custom, selectContainer, setCustom, containerCollapsed, setContainerCollapsed } = usePlanner()
+  const dims = useContainerDims()
+  const options = [...CONTAINER_PRESETS, { id: CUSTOM_CONTAINER_ID, name: 'Custom' }]
+  const selectedName = options.find((c) => c.id === containerId)?.name ?? 'Custom'
+
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold tracking-wider text-slate-400 uppercase">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  )
-}
+      <button
+        onClick={() => setContainerCollapsed(!containerCollapsed)}
+        aria-expanded={!containerCollapsed}
+        className="group flex items-center justify-between gap-2 text-left"
+      >
+        <span className="flex min-w-0 items-baseline gap-2">
+          <h2 className="text-xs font-semibold tracking-wider text-slate-400 uppercase">Container</h2>
+          {containerCollapsed && (
+            <span className="truncate text-xs text-slate-300">
+              {selectedName} · {dims.length}×{dims.width}×{dims.height} cm
+            </span>
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-slate-500 group-hover:text-slate-300">
+          {containerCollapsed ? 'Change' : 'Hide'}
+          <span className={`transition-transform ${containerCollapsed ? '' : 'rotate-180'}`}>▾</span>
+        </span>
+      </button>
 
-function ContainerPicker() {
-  const { containerId, custom, selectContainer, setCustom } = usePlanner()
-  const options = [...CONTAINER_PRESETS, { id: CUSTOM_CONTAINER_ID, name: 'Custom' }]
-
-  return (
-    <Section title="Container">
-      <div className="grid grid-cols-2 gap-2">
-        {options.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => selectContainer(c.id)}
-            className={`rounded-md border px-2 py-2 text-left text-sm transition ${
-              containerId === c.id
-                ? 'border-sky-500 bg-sky-500/10 text-sky-100'
-                : 'border-slate-700 text-slate-300 hover:border-slate-500'
-            }`}
-          >
-            <div className="font-medium">{c.name}</div>
-            {'length' in c && (
-              <div className="text-[11px] text-slate-500">
-                {c.length}×{c.width}×{c.height} cm · {(c.maxPayload! / 1000).toFixed(1)} t
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-      {containerId === CUSTOM_CONTAINER_ID && (
-        <div className="grid grid-cols-2 gap-2">
-          <NumField label="Length" suffix="cm" value={custom.length} onChange={(length) => setCustom({ length })} min={1} />
-          <NumField label="Width" suffix="cm" value={custom.width} onChange={(width) => setCustom({ width })} min={1} />
-          <NumField label="Height" suffix="cm" value={custom.height} onChange={(height) => setCustom({ height })} min={1} />
-          <NumField label="Max payload (0 = no limit)" suffix="kg" value={custom.maxPayload ?? 0} onChange={(maxPayload) => setCustom({ maxPayload })} />
-        </div>
+      {!containerCollapsed && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            {options.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => selectContainer(c.id)}
+                className={`rounded-md border px-2 py-2 text-left text-sm transition ${
+                  containerId === c.id
+                    ? 'border-sky-500 bg-sky-500/10 text-sky-100'
+                    : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                }`}
+              >
+                <div className="font-medium">{c.name}</div>
+                {'length' in c && (
+                  <div className="text-[11px] text-slate-500">
+                    {c.length}×{c.width}×{c.height} cm · {(c.maxPayload! / 1000).toFixed(1)} t
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+          {containerId === CUSTOM_CONTAINER_ID && (
+            <div className="grid grid-cols-2 gap-2">
+              <NumField label="Length" suffix="cm" value={custom.length} onChange={(length) => setCustom({ length })} min={1} />
+              <NumField label="Width" suffix="cm" value={custom.width} onChange={(width) => setCustom({ width })} min={1} />
+              <NumField label="Height" suffix="cm" value={custom.height} onChange={(height) => setCustom({ height })} min={1} />
+              <NumField label="Max payload (0 = no limit)" suffix="kg" value={custom.maxPayload ?? 0} onChange={(maxPayload) => setCustom({ maxPayload })} />
+            </div>
+          )}
+        </>
       )}
-    </Section>
+    </section>
   )
 }
 
 type AddMode = 'preset' | 'custom' | 'bulk'
 
-function ItemList({ unplaced, overweight }: { unplaced: Counts; overweight: Counts }) {
-  const { items, updateItem, removeItem, clearItems, resetToDefaults } = usePlanner()
+// Selector: where new items come from. Kept visually apart from the load list below.
+function AddItems() {
   const [mode, setMode] = useState<AddMode>('preset')
 
   return (
-    <Section
-      title="Items"
-      action={
-        <span className="flex gap-3 text-xs">
-          <button onClick={resetToDefaults} className="text-slate-500 hover:text-sky-300">
-            Reset to M / L / XXL
-          </button>
-          {items.length > 0 && (
-            <button onClick={clearItems} className="text-slate-500 hover:text-rose-400">
-              Clear all
-            </button>
-          )}
-        </span>
-      }
-    >
-      <div className="grid grid-cols-3 rounded-md border border-slate-700 p-0.5 text-xs">
+    <section className="flex flex-col gap-3 rounded-xl border border-sky-900/60 bg-sky-950/20 p-3">
+      <h2 className="text-xs font-semibold tracking-wider text-sky-300/80 uppercase">Add items</h2>
+      <div className="grid grid-cols-3 rounded-md border border-slate-700 bg-slate-950 p-0.5 text-xs">
         {(['preset', 'custom', 'bulk'] as const).map((m) => (
           <button
             key={m}
@@ -102,9 +103,40 @@ function ItemList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
       {mode === 'preset' && <PresetAdder />}
       {mode === 'custom' && <CustomAdder />}
       {mode === 'bulk' && <BulkAdder />}
+    </section>
+  )
+}
+
+// What's going into the container.
+function LoadList({ unplaced, overweight }: { unplaced: Counts; overweight: Counts }) {
+  const { items, updateItem, removeItem, clearItems, resetToDefaults } = usePlanner()
+  const units = items.reduce((a, it) => a + Math.max(0, it.quantity), 0)
+
+  return (
+    <section className="flex flex-col gap-3 border-t border-slate-700 pt-5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-xs font-semibold tracking-wider text-slate-300 uppercase">Your load</h2>
+          <p className="text-[11px] text-slate-500">
+            {items.length} item{items.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'}
+          </p>
+        </div>
+        <span className="flex shrink-0 gap-3 text-xs">
+          <button onClick={resetToDefaults} className="text-slate-500 hover:text-sky-300">
+            Reset to M / L / XXL
+          </button>
+          {items.length > 0 && (
+            <button onClick={clearItems} className="text-slate-500 hover:text-rose-400">
+              Clear all
+            </button>
+          )}
+        </span>
+      </div>
 
       {items.length === 0 && (
-        <p className="text-sm text-slate-500">No items yet. Add some above, or reset to your standard boxes.</p>
+        <p className="rounded-lg border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">
+          Nothing loaded yet. Add items above, or reset to your standard boxes.
+        </p>
       )}
 
       <ul className="flex flex-col gap-3">
@@ -173,7 +205,7 @@ function ItemList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
           </li>
         ))}
       </ul>
-    </Section>
+    </section>
   )
 }
 

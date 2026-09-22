@@ -9,6 +9,8 @@ interface PlannerState {
   items: Item[]
   /** How many placements to show, for stepping through the load order. null = all. */
   visibleCount: number | null
+  containerCollapsed: boolean
+  setContainerCollapsed: (collapsed: boolean) => void
   selectContainer: (id: string) => void
   setCustom: (dims: Partial<ContainerDims>) => void
   addItem: (preset: ItemPreset, quantity?: number) => void
@@ -49,6 +51,8 @@ export const usePlanner = create<PlannerState>()(
       custom: { length: 600, width: 240, height: 240, maxPayload: 0 },
       items: defaultItems(),
       visibleCount: null,
+      containerCollapsed: false,
+      setContainerCollapsed: (containerCollapsed) => set({ containerCollapsed }),
       selectContainer: (containerId) => set({ containerId, visibleCount: null }),
       setCustom: (dims) => set((s) => ({ custom: { ...s.custom, ...dims }, visibleCount: null })),
       addItem: (preset, quantity = 1) =>
@@ -68,7 +72,7 @@ export const usePlanner = create<PlannerState>()(
     }),
     {
       name: 'container-3d',
-      partialize: ({ containerId, custom, items }) => ({ containerId, custom, items }),
+      partialize: ({ containerId, custom, items, containerCollapsed }) => ({ containerId, custom, items, containerCollapsed }),
     },
   ),
 )
