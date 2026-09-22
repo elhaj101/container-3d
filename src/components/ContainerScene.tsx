@@ -3,6 +3,7 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { ContainerDims, Item, Placement } from '../lib/types'
+import { usePlanner } from '../store'
 
 // Scene units are metres; the packer works in centimetres.
 const M = 0.01
@@ -21,11 +22,25 @@ export function ContainerScene({ container, items, placements, usedLength }: Pro
   const span = Math.max(L, W, H)
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
   const freeLength = L - usedLength * M
+  const selectItem = usePlanner((s) => s.selectItem)
+  // Clicking empty space clears the selection, but finishing an orbit drag must not.
+  const downAt = useRef<[number, number] | null>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && selectItem(null)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectItem])
 
   return (
     <Canvas
       camera={{ position: [span * 0.8, span * 0.55, span * 0.9], fov: 45, near: 0.1, far: 500 }}
       dpr={[1, 2]}
+      onPointerDown={(e) => (downAt.current = [e.clientX, e.clientY])}
+      onPointerMissed={(e) => {
+        const d = downAt.current
+        if (d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) < 5) selectItem(null)
+      }}
     >
       <color attach="background" args={['#0f1115']} />
       <ambientLight intensity={0.6} />
@@ -171,6 +186,8 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
   const cabinRef = useRef<THREE.InstancedMesh>(null)
   const wheelRef = useRef<THREE.InstancedMesh>(null)
   const [hovered, setHovered] = useState<number | null>(null)
+  const selectedId = usePlanner((s) => s.selectedItemId)
+  const selectItem = usePlanner((s) => s.selectItem)
 
   // Placement indices per shape; instance i of a mesh maps back through these.
   const { boxIdx, cylIdx, carIdx } = useMemo(() => {
@@ -193,6 +210,9 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
     const pos = new THREE.Vector3()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
+    const bg = new THREE.Color('#0f1115')
+    // With a selection, everything else fades back so the selected item stands out.
+    const tint = (c: THREE.Color, itemId: string) => (selectedId && itemId !== selectedId ? c.lerp(bg, 0.75) : c)
     // Inset slightly so neighbouring units read as separate objects.
     const inset = (v: number) => Math.max(v * M - 0.01, v * M * 0.98)
 
@@ -203,7 +223,7 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
         pos.set((p.x + p.dx / 2) * M, (p.y + p.dy / 2) * M, (p.z + p.dz / 2) * M)
         m.compose(pos, Q_Y, scale.set(inset(p.dx), inset(p.dy), inset(p.dz)))
         box.setMatrixAt(i, m)
-        box.setColorAt(i, color.set(byId.get(p.itemId)?.color ?? '#999999'))
+        box.setColorAt(i, tint(color.set(byId.get(p.itemId)?.color ?? '#999999'), p.itemId))
       })
       box.count = boxIdx.length
       box.instanceMatrix.needsUpdate = true
@@ -223,7 +243,7 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
         else if (axis === 'x') m.compose(pos, Q_X, scale.set(inset(p.dy), inset(p.dx), inset(p.dz)))
         else m.compose(pos, Q_Z, scale.set(inset(p.dx), inset(p.dz), inset(p.dy)))
         cyl.setMatrixAt(i, m)
-        cyl.setColorAt(i, color.set(item.color))
+        cyl.setColorAt(i, tint(color.set(item.color), p.itemId))
       })
       cyl.count = cylIdx.length
       cyl.instanceMatrix.needsUpdate = true
@@ -254,11 +274,11 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
           scale.set(alongX ? sl : sw, sy, alongX ? sw : sl)
           mesh.setMatrixAt(at, m.compose(pos, q, scale))
         }
-        color.set(item.color)
+        tint(color.set(item.color), p.itemId)
         part(body, i, 0, h * 0.35, 0, len * 0.98, h * 0.46, wid * 0.98)
         body.setColorAt(i, color)
         part(cabin, i, -len * 0.04, h * 0.79, 0, len * 0.5, h * 0.42, wid * 0.86)
-        cabin.setColorAt(i, color.clone().lerp(dark, 0.55))
+        cabin.setColorAt(i, tint(color.set(item.color).lerp(dark, 0.55), p.itemId))
         // Wheels: unit cylinder turned so its axis runs across the car.
         const r = Math.min(h * 0.22, len * 0.08)
         const q = alongX ? Q_Z : Q_X
@@ -270,7 +290,7 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
             pos.set(cx + (alongX ? ol : ow), y0 + r, cz + (alongX ? ow : ol))
             scale.set(r * 2, wid * 0.12, r * 2)
             wheels.setMatrixAt(w, m.compose(pos, q, scale))
-            wheels.setColorAt(w, tyre)
+            wheels.setColorAt(w, tint(color.copy(tyre), p.itemId))
             w++
           }
       })
@@ -282,7 +302,7 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
         mesh.computeBoundingSphere()
       }
     }
-  }, [placements, byId, boxIdx, cylIdx, carIdx, boxCap, cylCap, carCap])
+  }, [placements, byId, boxIdx, cylIdx, carIdx, boxCap, cylCap, carCap, selectedId])
 
   const edges = useMemo(() => {
     const pos = new Float32Array(boxIdx.length * 24 * 3)
@@ -316,7 +336,40 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
       if (pi !== hovered) setHovered(pi)
     },
     onPointerOut: () => setHovered(null),
+    onClick: (e: ThreeEvent<MouseEvent>) => {
+      // Ignore the click that ends an orbit drag.
+      if (e.delta > 5 || e.instanceId === undefined) return
+      e.stopPropagation()
+      const id = placements[idx[Math.floor(e.instanceId / perPlacement)]]?.itemId
+      if (id) selectItem(id === selectedId ? null : id)
+    },
   })
+
+  // Bright outline around every unit of the selected item, drawn over everything.
+  const selectedEdges = useMemo(() => {
+    if (!selectedId) return null
+    const sel = placements.filter((p) => p.itemId === selectedId)
+    const pos = new Float32Array(sel.length * 24 * 3)
+    let o = 0
+    for (const p of sel) {
+      const x0 = p.x * M, x1 = (p.x + p.dx) * M
+      const y0 = p.y * M, y1 = (p.y + p.dy) * M
+      const z0 = p.z * M, z1 = (p.z + p.dz) * M
+      const c = [
+        [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
+        [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1],
+      ]
+      for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) {
+        pos.set(c[a], o)
+        pos.set(c[b], o + 3)
+        o += 6
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    return g
+  }, [placements, selectedId])
+  useEffect(() => () => selectedEdges?.dispose(), [selectedEdges])
 
   const hp = hovered !== null ? placements[hovered] : undefined
   const hItem = hp && byId.get(hp.itemId)
@@ -344,8 +397,13 @@ function PlacedBoxes({ placements, byId }: { placements: Placement[]; byId: Map<
         <meshStandardMaterial roughness={0.9} />
       </instancedMesh>
       <lineSegments geometry={edges}>
-        <lineBasicMaterial color="#000000" transparent opacity={0.3} />
+        <lineBasicMaterial color="#000000" transparent opacity={selectedId ? 0.12 : 0.3} />
       </lineSegments>
+      {selectedEdges && (
+        <lineSegments geometry={selectedEdges} renderOrder={10} raycast={() => null}>
+          <lineBasicMaterial color="#7dd3fc" depthTest={false} transparent opacity={0.9} />
+        </lineSegments>
+      )}
       {hp && hItem && (
         <mesh position={[(hp.x + hp.dx / 2) * M, (hp.y + hp.dy / 2) * M, (hp.z + hp.dz / 2) * M]} raycast={() => null}>
           <boxGeometry args={[hp.dx * M + 0.01, hp.dy * M + 0.01, hp.dz * M + 0.01]} />

@@ -10,6 +10,9 @@ interface PlannerState {
   /** How many placements to show, for stepping through the load order. null = all. */
   visibleCount: number | null
   containerCollapsed: boolean
+  /** Item highlighted in both the 3D view and the list. Not persisted. */
+  selectedItemId: string | null
+  selectItem: (id: string | null) => void
   setContainerCollapsed: (collapsed: boolean) => void
   selectContainer: (id: string) => void
   setCustom: (dims: Partial<ContainerDims>) => void
@@ -52,6 +55,8 @@ export const usePlanner = create<PlannerState>()(
       items: defaultItems(),
       visibleCount: null,
       containerCollapsed: false,
+      selectedItemId: null,
+      selectItem: (selectedItemId) => set({ selectedItemId }),
       setContainerCollapsed: (containerCollapsed) => set({ containerCollapsed }),
       selectContainer: (containerId) => set({ containerId, visibleCount: null }),
       setCustom: (dims) => set((s) => ({ custom: { ...s.custom, ...dims }, visibleCount: null })),
@@ -59,15 +64,19 @@ export const usePlanner = create<PlannerState>()(
         set((s) => ({ items: withIds([{ preset, quantity }], s.items), visibleCount: null })),
       addItems: (entries) =>
         set((s) => ({ items: withIds(entries, s.items), visibleCount: null })),
-      resetToDefaults: () => set({ items: defaultItems(), visibleCount: null }),
+      resetToDefaults: () => set({ items: defaultItems(), visibleCount: null, selectedItemId: null }),
       updateItem: (id, patch) =>
         set((s) => ({
           items: s.items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
           visibleCount: null,
         })),
       removeItem: (id) =>
-        set((s) => ({ items: s.items.filter((it) => it.id !== id), visibleCount: null })),
-      clearItems: () => set({ items: [], visibleCount: null }),
+        set((s) => ({
+          items: s.items.filter((it) => it.id !== id),
+          visibleCount: null,
+          selectedItemId: s.selectedItemId === id ? null : s.selectedItemId,
+        })),
+      clearItems: () => set({ items: [], visibleCount: null, selectedItemId: null }),
       setVisibleCount: (visibleCount) => set({ visibleCount }),
     }),
     {

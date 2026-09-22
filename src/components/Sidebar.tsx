@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { parseBulk } from '../lib/bulk'
 import { CAR_DEFAULT_GAP, CAR_PRESETS, carItem, CONTAINER_PRESETS, CUSTOM_CONTAINER_ID, ITEM_PRESETS } from '../lib/presets'
 import type { Item } from '../lib/types'
@@ -110,7 +110,14 @@ function AddItems() {
 
 // What's going into the container.
 function LoadList({ unplaced, overweight }: { unplaced: Counts; overweight: Counts }) {
-  const { items, updateItem, removeItem, clearItems, resetToDefaults } = usePlanner()
+  const { items, updateItem, removeItem, clearItems, resetToDefaults, selectedItemId, selectItem } = usePlanner()
+  const cardRefs = useRef(new Map<string, HTMLLIElement>())
+
+  // A unit clicked in the 3D view brings its card into view.
+  useEffect(() => {
+    if (selectedItemId) cardRefs.current.get(selectedItemId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selectedItemId])
+
   const units = items.reduce((a, it) => a + Math.max(0, it.quantity), 0)
 
   return (
@@ -142,7 +149,23 @@ function LoadList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
 
       <ul className="flex flex-col gap-3">
         {items.map((it) => (
-          <li key={it.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+          <li
+            key={it.id}
+            ref={(el) => {
+              if (el) cardRefs.current.set(it.id, el)
+              else cardRefs.current.delete(it.id)
+            }}
+            onClick={(e) => {
+              // Selecting via the card itself, not while editing its fields.
+              if ((e.target as HTMLElement).closest('input, button, select, summary, label')) return
+              selectItem(selectedItemId === it.id ? null : it.id)
+            }}
+            className={`scroll-mt-4 rounded-lg border p-3 transition ${
+              selectedItemId === it.id
+                ? 'border-sky-400 bg-sky-950/40 ring-2 ring-sky-400/40'
+                : 'cursor-pointer border-slate-800 bg-slate-900/60 hover:border-slate-600'
+            }`}
+          >
             <div className="mb-2 flex items-center gap-2">
               <input
                 type="color"

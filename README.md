@@ -54,6 +54,10 @@ npm run build   # static build in dist/
     stop's cargo is never buried behind a later one's.
 - **Load indicator** at the top of the 3D view shows how full the container is (% of
   volume, plus % of payload when weights are set) and turns red when units don't fit.
+- **Click to select**: click any unit in the 3D view to select its item — the card is
+  highlighted and scrolled into view, every unit of that item is outlined and the rest of
+  the load fades back. Clicking a card does the same in reverse; click empty space, press
+  Esc or click the card again to clear.
 - **1 m reference grid** on the container walls, floor and ceiling, with labelled ticks.
 - Everything is saved in the browser (localStorage), so a plan survives a reload.
 
