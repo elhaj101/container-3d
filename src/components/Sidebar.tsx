@@ -7,12 +7,12 @@ import { NumField } from './NumField'
 
 type Counts = Record<string, number>
 
-export function Sidebar({ unplaced, overweight }: { unplaced: Counts; overweight: Counts }) {
+export function Sidebar({ unplaced, overweight, tooBigForDoor }: { unplaced: Counts; overweight: Counts; tooBigForDoor: Counts }) {
   return (
     <div className="flex flex-col gap-6">
       <ContainerPicker />
       <AddItems />
-      <LoadList unplaced={unplaced} overweight={overweight} />
+      <LoadList unplaced={unplaced} overweight={overweight} tooBigForDoor={tooBigForDoor} />
     </div>
   )
 }
@@ -59,9 +59,14 @@ function ContainerPicker() {
               >
                 <div className="font-medium">{c.name}</div>
                 {'length' in c && (
-                  <div className="text-[11px] text-slate-500">
-                    {c.length}×{c.width}×{c.height} cm · {(c.maxPayload! / 1000).toFixed(1)} t
-                  </div>
+                  <>
+                    <div className="text-[11px] text-slate-500">
+                      {c.length}×{c.width}×{c.height} cm · {(c.maxPayload! / 1000).toFixed(1)} t
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      door {c.doorWidth}×{c.doorHeight} cm
+                    </div>
+                  </>
                 )}
               </button>
             ))}
@@ -72,6 +77,8 @@ function ContainerPicker() {
               <NumField label="Width" suffix="cm" value={custom.width} onChange={(width) => setCustom({ width })} min={1} />
               <NumField label="Height" suffix="cm" value={custom.height} onChange={(height) => setCustom({ height })} min={1} />
               <NumField label="Max payload (0 = no limit)" suffix="kg" value={custom.maxPayload ?? 0} onChange={(maxPayload) => setCustom({ maxPayload })} />
+              <NumField label="Door width (0 = no check)" suffix="cm" value={custom.doorWidth ?? 0} onChange={(doorWidth) => setCustom({ doorWidth })} />
+              <NumField label="Door height (0 = no check)" suffix="cm" value={custom.doorHeight ?? 0} onChange={(doorHeight) => setCustom({ doorHeight })} />
             </div>
           )}
         </>
@@ -109,7 +116,7 @@ function AddItems() {
 }
 
 // What's going into the container.
-function LoadList({ unplaced, overweight }: { unplaced: Counts; overweight: Counts }) {
+function LoadList({ unplaced, overweight, tooBigForDoor }: { unplaced: Counts; overweight: Counts; tooBigForDoor: Counts }) {
   const { items, updateItem, removeItem, clearItems, resetToDefaults, selectedItemId, selectItem } = usePlanner()
   const cardRefs = useRef(new Map<string, HTMLLIElement>())
 
@@ -223,9 +230,11 @@ function LoadList({ unplaced, overweight }: { unplaced: Counts; overweight: Coun
               </label>
               {unplaced[it.id] > 0 && (
                 <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-rose-300">
-                  {overweight[it.id] === unplaced[it.id]
-                    ? `${unplaced[it.id]} over payload`
-                    : `${unplaced[it.id]} won't fit`}
+                  {tooBigForDoor[it.id] === unplaced[it.id]
+                    ? `too big for the doors`
+                    : overweight[it.id] === unplaced[it.id]
+                      ? `${unplaced[it.id]} over payload`
+                      : `${unplaced[it.id]} won't fit`}
                 </span>
               )}
             </div>

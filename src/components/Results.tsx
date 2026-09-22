@@ -121,6 +121,7 @@ export function LoadIndicator({ result, container }: { result: PackResult; conta
   const pct = result.containerVolume ? (result.usedVolume / result.containerVolume) * 100 : 0
   const unplaced = Object.values(result.unplaced).reduce((a, b) => a + b, 0)
   const overweight = Object.values(result.overweight).reduce((a, b) => a + b, 0)
+  const doorBlocked = Object.values(result.tooBigForDoor).reduce((a, b) => a + b, 0)
   const free = m3(result.containerVolume - result.usedVolume)
   const weightPct =
     container.maxPayload && result.totalWeight > 0 ? (result.totalWeight / container.maxPayload) * 100 : null
@@ -131,6 +132,9 @@ export function LoadIndicator({ result, container }: { result: PackResult; conta
   if (result.placements.length === 0 && unplaced === 0) {
     tone = 'border-slate-600 bg-slate-900/80 text-slate-300'
     message = 'Container is empty (0% loaded). Add items to start packing'
+  } else if (doorBlocked > 0) {
+    tone = 'border-rose-500/50 bg-rose-950/80 text-rose-100'
+    message = `${doorBlocked} unit${doorBlocked === 1 ? '' : 's'} can't pass the door opening (${container.doorWidth}×${container.doorHeight} cm). Container is ${pct.toFixed(1)}% loaded`
   } else if (overweight > 0) {
     tone = 'border-rose-500/50 bg-rose-950/80 text-rose-100'
     message = `Payload limit reached (${kg(result.totalWeight)}) at ${pct.toFixed(1)}% of volume. ${overweight} unit${overweight === 1 ? '' : 's'} left off for weight`

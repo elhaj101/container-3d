@@ -170,4 +170,15 @@ describe('pack — freight options', () => {
     expect(forty.placements).toHaveLength(2)
     expect(forty.placements.every((p) => p.y === 0 && p.dy === corolla.height)).toBe(true)
   })
+
+  it('rejects items that fit inside but not through the door, and says so', () => {
+    const tall = item({ id: 'tall', length: 100, width: 100, height: 235, keepUpright: true })
+    const res = pack(CONTAINER_PRESETS[0], [tall])
+    expect(res.placements).toHaveLength(0)
+    expect(res.tooBigForDoor).toEqual({ tall: 1 })
+    // Allowed to tip over, it goes in on its side instead.
+    const tipped = pack(CONTAINER_PRESETS[0], [{ ...tall, keepUpright: false }])
+    expect(tipped.placements).toHaveLength(1)
+    expect(tipped.placements[0].dy).toBeLessThanOrEqual(228)
+  })
 })

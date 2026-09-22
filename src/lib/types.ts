@@ -7,6 +7,9 @@ export interface ContainerDims {
   height: number
   /** Maximum cargo weight in kg. Omitted or 0 = no weight check. */
   maxPayload?: number
+  /** Door opening, cm. Every unit has to pass through it. Omitted = no door check. */
+  doorWidth?: number
+  doorHeight?: number
 }
 
 export interface ContainerPreset extends ContainerDims {
@@ -67,4 +70,6 @@ export interface PackResult {
   totalWeight: number
   /** itemId → units left out only because the payload limit was reached. */
   overweight: Record<string, number>
+  /** itemId → units that fit inside but can't pass through the door opening. */
+  tooBigForDoor: Record<string, number>
 }

@@ -79,9 +79,18 @@ irregular-shape nesting is a much harder geometry problem and not worth it for v
 few presets (e.g. "Bicycle ≈ 180×60×110 cm") plus a custom-size entry, and an optional
 "this side must stay up" orientation lock.
 
-**Container presets**
-20' GP, 40' GP, 40' HC, 45' HC standard ISO dimensions, plus a "Custom" option with
-editable length/width/height.
+**Container presets** (internal size, door opening, max payload — from carrier spec
+sheets; check the CSC plate on the actual box)
+
+| Type | Inside L × W × H (cm) | Door W × H (cm) | Max payload |
+|---|---|---|---|
+| 20' Standard | 589 × 235 × 239 | 234 × 228 | 28,200 kg |
+| 40' Standard | 1203 × 235 × 239 | 234 × 228 | 28,800 kg |
+| 40' High Cube | 1203 × 235 × 269.8 | 234 × 258 | 28,600 kg |
+| 45' High Cube | 1356 × 235 × 269.8 | 234 × 258 | 27,600 kg |
+
+Plus a "Custom" option with editable size, payload and door opening. Every unit must pass
+through the door opening (height × width), not just fit inside.
 
 **Output**
 Packed volume % and remaining free volume, an item-by-item placement list, and the

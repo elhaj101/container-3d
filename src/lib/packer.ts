@@ -209,6 +209,9 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
   const grid = new BoxGrid()
   const unplaced: Record<string, number> = {}
   const overweight: Record<string, number> = {}
+  const tooBigForDoor: Record<string, number> = {}
+  const doorW = container.doorWidth || Infinity
+  const doorH = container.doorHeight || Infinity
   const maxPayload = container.maxPayload && container.maxPayload > 0 ? container.maxPayload : Infinity
   let totalWeight = 0
   let points: Point[] = [{ x: 0, y: 0, z: 0 }]
@@ -246,7 +249,15 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     // toward the doors.
     let best: (Point & { s: Size }) | null = null
     // Spacing widens the reserved footprint; height is left alone so stacks stay in contact.
-    const sizes = orientations(item).map(([dx, dy, dz]): Size => [dx + gap, dy, dz + gap])
+    // Units go in lengthwise through the doors, so their height × width must pass the opening.
+    const insideFits = orientations(item).filter(([dx, dy, dz]) => dx <= L + EPS && dy <= H + EPS && dz <= W + EPS)
+    const doorFits = insideFits.filter(([, dy, dz]) => dy <= doorH + EPS && dz <= doorW + EPS)
+    if (insideFits.length > 0 && doorFits.length === 0) {
+      unplaced[item.id] = (unplaced[item.id] ?? 0) + 1
+      tooBigForDoor[item.id] = (tooBigForDoor[item.id] ?? 0) + 1
+      continue
+    }
+    const sizes = doorFits.map(([dx, dy, dz]): Size => [dx + gap, dy, dz + gap])
     for (const p of points) {
       if (p.x < minX - EPS) continue
       if (item.floorOnly && p.y > EPS) continue
@@ -316,6 +327,7 @@ export function pack(container: ContainerDims, items: Item[]): PackResult {
     placements,
     unplaced,
     overweight,
+    tooBigForDoor,
     totalWeight,
     containerVolume: L * W * H,
     usedVolume,

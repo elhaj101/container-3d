@@ -29,7 +29,7 @@ export default function App() {
           <h1 className="text-lg font-semibold">Container 3D</h1>
           <p className="text-sm text-slate-400">Pick a container, list your items, see how they pack.</p>
         </header>
-        <Sidebar unplaced={result.unplaced} overweight={result.overweight} />
+        <Sidebar unplaced={result.unplaced} overweight={result.overweight} tooBigForDoor={result.tooBigForDoor} />
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">

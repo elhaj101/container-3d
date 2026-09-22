@@ -1,12 +1,13 @@
 import type { ContainerPreset, Item } from './types'
 
-// Typical internal dimensions (cm) and max payload (kg) of ISO dry containers.
-// Exact values vary by manufacturer; check the CSC plate on the actual box.
+// Internal dimensions, door openings (cm) and max payload (kg) of ISO dry containers, per
+// carrier spec sheets (Hapag-Lloyd, BWS). Figures vary a little by manufacturer and build
+// year, especially payload: always check the CSC plate on the actual box.
 export const CONTAINER_PRESETS: ContainerPreset[] = [
-  { id: '20gp', name: "20' Standard", length: 589, width: 235, height: 239, maxPayload: 28200 },
-  { id: '40gp', name: "40' Standard", length: 1203, width: 235, height: 239, maxPayload: 26700 },
-  { id: '40hc', name: "40' High Cube", length: 1203, width: 235, height: 269, maxPayload: 26500 },
-  { id: '45hc', name: "45' High Cube", length: 1356, width: 235, height: 269, maxPayload: 27600 },
+  { id: '20gp', name: "20' Standard", length: 589, width: 235, height: 239, doorWidth: 234, doorHeight: 228, maxPayload: 28200 },
+  { id: '40gp', name: "40' Standard", length: 1203, width: 235, height: 239, doorWidth: 234, doorHeight: 228, maxPayload: 28800 },
+  { id: '40hc', name: "40' High Cube", length: 1203, width: 235, height: 269.8, doorWidth: 234, doorHeight: 258, maxPayload: 28600 },
+  { id: '45hc', name: "45' High Cube", length: 1356, width: 235, height: 269.8, doorWidth: 234, doorHeight: 258, maxPayload: 27600 },
 ]
 
 export const CUSTOM_CONTAINER_ID = 'custom'
