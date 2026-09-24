@@ -3,6 +3,7 @@ import { ContainerScene } from './components/ContainerScene'
 import { LoadIndicator, Results } from './components/Results'
 import { Sidebar } from './components/Sidebar'
 import { pack } from './lib/packer'
+import { revokeAccess } from './lib/access'
 import { useContainerDims, usePlanner } from './store'
 
 export default function App() {
@@ -25,9 +26,19 @@ export default function App() {
         <LoadIndicator result={result} container={container} />
       </div>
       <aside className="w-full shrink-0 overflow-y-auto border-slate-800 p-4 lg:w-96 lg:border-r">
-        <header className="mb-6">
-          <h1 className="text-lg font-semibold">Container 3D</h1>
-          <p className="text-sm text-slate-400">Pick a container, list your items, see how they pack.</p>
+        <header className="mb-6 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold">Container 3D</h1>
+            <p className="text-sm text-slate-400">Pick a container, list your items, see how they pack.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { revokeAccess(); location.reload() }}
+            className="shrink-0 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200"
+            title="Lock the planner on this device"
+          >
+            Lock
+          </button>
         </header>
         <Sidebar unplaced={result.unplaced} overweight={result.overweight} tooBigForDoor={result.tooBigForDoor} />
       </aside>
